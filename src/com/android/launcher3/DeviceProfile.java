@@ -16,10 +16,13 @@
 
 package com.android.launcher3;
 
+import static android.util.DisplayMetrics.DENSITY_DEVICE_STABLE;
 import static android.view.WindowManager.LayoutParams.TYPE_APPLICATION;
 
 import static com.android.launcher3.ResourceUtils.pxFromDp;
 import static com.android.launcher3.Utilities.dpiFromPx;
+import static com.android.launcher3.Utilities.pxFromSp;
+import static com.android.launcher3.util.WindowManagerCompat.MIN_TABLET_WIDTH;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
@@ -61,6 +64,7 @@ public class DeviceProfile {
     public final boolean isPhone;
     public final boolean transposeLayoutWithOrientation;
     public final boolean isTwoPanels;
+    public final boolean allowRotation;
 
     // Device properties in current orientation
     public final boolean isLandscape;
@@ -166,12 +170,16 @@ public class DeviceProfile {
     public int overviewTaskMarginPx;
     public int overviewTaskIconSizePx;
     public int overviewTaskThumbnailTopMarginPx;
+    public final int overviewActionsMarginThreeButtonPx;
+    public final int overviewActionsMarginGesturePx;
 
     // Widgets
     public final PointF appWidgetScale = new PointF(1.0f, 1.0f);
 
     // Drop Target
     public int dropTargetBarSizePx;
+    public int dropTargetDragPaddingPx;
+    public int dropTargetTextSizePx;
 
     // Insets
     private final Rect mInsets = new Rect();
@@ -189,6 +197,9 @@ public class DeviceProfile {
     public int taskbarSize;
     // How much of the bottom inset is due to Taskbar rather than other system elements.
     public int nonOverlappingTaskbarInset;
+
+    // DragController
+    public int flingToDeleteThresholdVelocity;
 
     DeviceProfile(Context context, InvariantDeviceProfile inv, Info info, WindowBounds windowBounds,
             boolean isMultiWindowMode, boolean transposeLayoutWithOrientation,
@@ -210,7 +221,12 @@ public class DeviceProfile {
         int nonFinalAvailableHeightPx = windowBounds.availableSize.y;
 
         mInfo = info;
-        isTablet = info.isTablet(windowBounds);
+        // If the device's pixel density was scaled (usually via settings for A11y), use the
+        // original dimensions to determine if rotation is allowed of not.
+        float originalSmallestWidth = dpiFromPx(Math.min(widthPx, heightPx), DENSITY_DEVICE_STABLE);
+        allowRotation = originalSmallestWidth >= MIN_TABLET_WIDTH;
+        // Tablet UI does not support emulated landscape.
+        isTablet = allowRotation && info.isTablet(windowBounds);
         isPhone = !isTablet;
         isTwoPanels = isTablet && useTwoPanels;
 
@@ -287,7 +303,11 @@ public class DeviceProfile {
 
         iconDrawablePaddingOriginalPx =
                 res.getDimensionPixelSize(R.dimen.dynamic_grid_icon_drawable_padding);
+
         dropTargetBarSizePx = res.getDimensionPixelSize(R.dimen.dynamic_grid_drop_target_size);
+        dropTargetDragPaddingPx = res.getDimensionPixelSize(R.dimen.drop_target_drag_padding);
+        dropTargetTextSizePx = res.getDimensionPixelSize(R.dimen.drop_target_text_size);
+
         workspaceSpringLoadedBottomSpace =
                 res.getDimensionPixelSize(R.dimen.dynamic_grid_min_spring_loaded_space);
 
@@ -320,6 +340,10 @@ public class DeviceProfile {
                         R.dimen.task_thumbnail_icon_size_grid) : res.getDimensionPixelSize(
                         R.dimen.task_thumbnail_icon_size);
         overviewTaskThumbnailTopMarginPx = overviewTaskIconSizePx + overviewTaskMarginPx * 2;
+        overviewActionsMarginGesturePx = res.getDimensionPixelSize(
+                R.dimen.overview_actions_bottom_margin_gesture);
+        overviewActionsMarginThreeButtonPx = res.getDimensionPixelSize(
+                R.dimen.overview_actions_bottom_margin_three_button);
 
         // Calculate all of the remaining variables.
         extraSpace = updateAvailableDimensions(res);
@@ -354,6 +378,9 @@ public class DeviceProfile {
         }
         updateWorkspacePadding();
 
+        flingToDeleteThresholdVelocity = res.getDimensionPixelSize(
+                R.dimen.drag_flingToDeleteMinVelocity);
+
         // This is done last, after iconSizePx is calculated above.
         Path dotPath = GraphicsUtils.getShapePath(DEFAULT_DOT_SIZE);
         mDotRendererWorkSpace = new DotRenderer(iconSizePx, dotPath, DEFAULT_DOT_SIZE);
@@ -372,8 +399,10 @@ public class DeviceProfile {
     public boolean shouldInsetWidgets() {
         Rect widgetPadding = inv.defaultWidgetPadding;
 
-        // Check all sides to ensure that the widget won't overlap into another cell.
-        return cellLayoutBorderSpacingPx > widgetPadding.left
+        // Check all sides to ensure that the widget won't overlap into another cell, or into
+        // status bar.
+        return workspaceTopPadding > widgetPadding.top
+                && cellLayoutBorderSpacingPx > widgetPadding.left
                 && cellLayoutBorderSpacingPx > widgetPadding.top
                 && cellLayoutBorderSpacingPx > widgetPadding.right
                 && cellLayoutBorderSpacingPx > widgetPadding.bottom;
@@ -498,7 +527,7 @@ public class DeviceProfile {
         float invIconSizeDp = isLandscape ? inv.landscapeIconSize : inv.iconSize;
         iconSizePx = Math.max(1, pxFromDp(invIconSizeDp, mMetrics, scale));
         float invIconTextSizeSp = isLandscape ? inv.landscapeIconTextSize : inv.iconTextSize;
-        iconTextSizePx = (int) (Utilities.pxFromSp(invIconTextSizeSp, mMetrics) * scale);
+        iconTextSizePx = (int) (pxFromSp(invIconTextSizeSp, mMetrics) * scale);
         iconDrawablePaddingPx = (int) (iconDrawablePaddingOriginalPx * scale);
 
         setCellLayoutBorderSpacing((int) (cellLayoutBorderSpacingOriginalPx * scale));
@@ -528,7 +557,7 @@ public class DeviceProfile {
         // All apps
         if (numShownAllAppsColumns != inv.numColumns) {
             allAppsIconSizePx = pxFromDp(inv.allAppsIconSize, mMetrics);
-            allAppsIconTextSizePx = Utilities.pxFromSp(inv.allAppsIconTextSize, mMetrics);
+            allAppsIconTextSizePx = pxFromSp(inv.allAppsIconTextSize, mMetrics);
             allAppsIconDrawablePaddingPx = iconDrawablePaddingOriginalPx;
             autoResizeAllAppsCells();
         } else {
@@ -599,7 +628,7 @@ public class DeviceProfile {
     private void updateFolderCellSize(float scale, Resources res) {
         float invIconSizeDp = isVerticalBarLayout() ? inv.landscapeIconSize : inv.iconSize;
         folderChildIconSizePx = Math.max(1, pxFromDp(invIconSizeDp, mMetrics, scale));
-        folderChildTextSizePx = pxFromDp(inv.iconTextSize, mMetrics, scale);
+        folderChildTextSizePx = pxFromSp(inv.iconTextSize, mMetrics, scale);
         folderLabelTextSizePx = (int) (folderChildTextSizePx * folderLabelTextScale);
 
         int textHeight = Utilities.calculateTextHeight(folderChildTextSizePx);
@@ -821,6 +850,7 @@ public class DeviceProfile {
         writer.println(prefix + "DeviceProfile:");
         writer.println(prefix + "\t1 dp = " + mMetrics.density + " px");
 
+        writer.println(prefix + "\tallowRotation:" + allowRotation);
         writer.println(prefix + "\tisTablet:" + isTablet);
         writer.println(prefix + "\tisPhone:" + isPhone);
         writer.println(prefix + "\ttransposeLayoutWithOrientation:"

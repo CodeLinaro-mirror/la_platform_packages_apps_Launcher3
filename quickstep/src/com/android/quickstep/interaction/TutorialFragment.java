@@ -38,6 +38,7 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 
 import com.android.launcher3.R;
+import com.android.launcher3.Utilities;
 import com.android.quickstep.interaction.TutorialController.TutorialType;
 
 abstract class TutorialFragment extends Fragment implements OnTouchListener {
@@ -51,9 +52,13 @@ abstract class TutorialFragment extends Fragment implements OnTouchListener {
     EdgeBackGestureHandler mEdgeBackGestureHandler;
     NavBarGestureHandler mNavBarGestureHandler;
     private ImageView mFeedbackVideoView;
+    private ImageView mGestureVideoView;
 
     @Nullable private AnimatedVectorDrawable mTutorialAnimation = null;
+    @Nullable private AnimatedVectorDrawable mGestureAnimation = null;
     private boolean mIntroductionShown = false;
+
+    private boolean mFragmentStopped = false;
 
     public static TutorialFragment newInstance(TutorialType tutorialType) {
         TutorialFragment fragment = getFragmentForTutorialType(tutorialType);
@@ -92,13 +97,22 @@ abstract class TutorialFragment extends Fragment implements OnTouchListener {
         return null;
     }
 
-    @Nullable Integer getFeedbackVideoResId() {
+    @Nullable Integer getFeedbackVideoResId(boolean forDarkMode) {
+        return null;
+    }
+
+    @Nullable Integer getGestureVideoResId() {
         return null;
     }
 
     @Nullable
     AnimatedVectorDrawable getTutorialAnimation() {
         return mTutorialAnimation;
+    }
+
+    @Nullable
+    AnimatedVectorDrawable getGestureAnimation() {
+        return mGestureAnimation;
     }
 
     abstract TutorialController createController(TutorialType type);
@@ -135,6 +149,7 @@ abstract class TutorialFragment extends Fragment implements OnTouchListener {
         });
         mRootView.setOnTouchListener(this);
         mFeedbackVideoView = mRootView.findViewById(R.id.gesture_tutorial_feedback_video);
+        mGestureVideoView = mRootView.findViewById(R.id.gesture_tutorial_gesture_video);
         return mRootView;
     }
 
@@ -142,6 +157,8 @@ abstract class TutorialFragment extends Fragment implements OnTouchListener {
     public void onStop() {
         super.onStop();
         releaseFeedbackVideoView();
+        releaseGestureVideoView();
+        mFragmentStopped = true;
     }
 
     void initializeFeedbackVideoView() {
@@ -153,16 +170,19 @@ abstract class TutorialFragment extends Fragment implements OnTouchListener {
             Integer introTileStringResId = mTutorialController.getIntroductionTitle();
             Integer introSubtitleResId = mTutorialController.getIntroductionSubtitle();
             if (introTileStringResId != null && introSubtitleResId != null) {
-                mTutorialController.showFeedback(introTileStringResId,
-                        introSubtitleResId, null, false);
+                mTutorialController.showFeedback(introTileStringResId, introSubtitleResId, false);
                 mIntroductionShown = true;
             }
         }
     }
 
     boolean updateFeedbackVideo() {
-        Integer feedbackVideoResId = getFeedbackVideoResId();
-        if (feedbackVideoResId == null || getContext() == null) {
+        if (getContext() == null) {
+            return false;
+        }
+        Integer feedbackVideoResId = getFeedbackVideoResId(Utilities.isDarkTheme(getContext()));
+
+        if (feedbackVideoResId == null || !updateGestureVideo()) {
             return false;
         }
         mTutorialAnimation = (AnimatedVectorDrawable) getContext().getDrawable(feedbackVideoResId);
@@ -190,6 +210,29 @@ abstract class TutorialFragment extends Fragment implements OnTouchListener {
         return true;
     }
 
+    boolean updateGestureVideo() {
+        Integer gestureVideoResId = getGestureVideoResId();
+        if (gestureVideoResId == null || getContext() == null) {
+            return false;
+        }
+        mGestureAnimation = (AnimatedVectorDrawable) getContext().getDrawable(gestureVideoResId);
+
+        if (mGestureAnimation != null) {
+            mGestureAnimation.registerAnimationCallback(new Animatable2.AnimationCallback() {
+
+                @Override
+                public void onAnimationEnd(Drawable drawable) {
+                    super.onAnimationEnd(drawable);
+
+                    mGestureAnimation.start();
+                }
+            });
+        }
+        mGestureVideoView.setImageDrawable(mGestureAnimation);
+
+        return true;
+    }
+
     void releaseFeedbackVideoView() {
         if (mTutorialAnimation != null && mTutorialAnimation.isRunning()) {
             mTutorialAnimation.stop();
@@ -198,10 +241,23 @@ abstract class TutorialFragment extends Fragment implements OnTouchListener {
         mFeedbackVideoView.setVisibility(View.GONE);
     }
 
+    void releaseGestureVideoView() {
+        if (mGestureAnimation != null && mGestureAnimation.isRunning()) {
+            mGestureAnimation.stop();
+        }
+
+        mGestureVideoView.setVisibility(View.GONE);
+    }
+
     @Override
     public void onResume() {
         super.onResume();
-        changeController(mTutorialType);
+        if (mFragmentStopped) {
+            mTutorialController.showFeedback();
+            mFragmentStopped = false;
+        } else {
+            changeController(mTutorialType);
+        }
     }
 
     @Override
@@ -281,6 +337,10 @@ abstract class TutorialFragment extends Fragment implements OnTouchListener {
         GestureSandboxActivity gestureSandboxActivity = getGestureSandboxActivity();
 
         return gestureSandboxActivity == null ? -1 : gestureSandboxActivity.getNumSteps();
+    }
+
+    boolean isAtFinalStep() {
+        return getCurrentStep() == getNumSteps();
     }
 
     @Nullable

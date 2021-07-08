@@ -63,7 +63,6 @@ import android.graphics.Matrix;
 import android.graphics.PointF;
 import android.graphics.Rect;
 import android.os.Build;
-import android.os.Handler;
 import android.os.IBinder;
 import android.os.SystemClock;
 import android.view.MotionEvent;
@@ -83,6 +82,7 @@ import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
 import com.android.launcher3.anim.AnimationSuccessListener;
+import com.android.launcher3.anim.AnimatorPlaybackController;
 import com.android.launcher3.logging.StatsLogManager;
 import com.android.launcher3.logging.StatsLogManager.StatsLogger;
 import com.android.launcher3.statemanager.BaseState;
@@ -136,7 +136,6 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
     protected final BaseActivityInterface<S, T> mActivityInterface;
     protected final InputConsumerProxy mInputConsumerProxy;
     protected final ActivityInitListener mActivityInitListener;
-    private final Handler mHandler = new Handler();
     // Callbacks to be made once the recents animation starts
     private final ArrayList<Runnable> mRecentsAnimationStartCallbacks = new ArrayList<>();
     private final OnScrollChangedListener mOnRecentsScrollListener = this::onRecentsViewScroll;
@@ -148,9 +147,6 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
     protected Runnable mGestureEndCallback;
     protected MultiStateCallback mStateCallback;
     protected boolean mCanceled;
-    // One time flag set when onConsumerAboutToBeSwitched() is called, indicating that certain
-    // shared animations should not be canceled when this handler is invalidated
-    private boolean mConsumerIsSwitching;
     private boolean mRecentsViewScrollLinked = false;
 
     private static int getFlagForIndex(int index, String name) {
@@ -398,6 +394,9 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
         if (mStateCallback.hasStates(STATE_HANDLER_INVALIDATED)) {
             return;
         }
+        // RecentsView never updates the display rotation until swipe-up, force update
+        // RecentsOrientedState before passing to TaskViewSimulator.
+        mRecentsView.updateRecentsRotation();
         mTaskViewSimulator.setOrientationState(mRecentsView.getPagedViewOrientedState());
 
         // If we've already ended the gesture and are going home, don't prepare recents UI,
@@ -755,6 +754,7 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
         setIsLikelyToStartNewTask(isLikelyToStartNewTask, false /* animate */);
         mStateCallback.setStateOnUiThread(STATE_GESTURE_STARTED);
         mGestureStarted = true;
+        SystemUiProxy.INSTANCE.get(mContext).notifySwipeUpGestureStarted();
     }
 
     /**
@@ -972,6 +972,10 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
         }
         if (endTarget == HOME) {
             duration = HOME_DURATION;
+            // Early detach the nav bar once the endTarget is determined as HOME
+            if (mRecentsAnimationController != null) {
+                mRecentsAnimationController.detachNavigationBarFromApp(true);
+            }
         } else if (endTarget == RECENTS) {
             if (mRecentsView != null) {
                 int nearestPage = mRecentsView.getDestinationPage();
@@ -1007,14 +1011,7 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
         animateToProgress(startShift, endShift, duration, interpolator, endTarget, velocity);
     }
 
-    private int getLogGestureTaskIndex(@Nullable TaskView targetTask) {
-        return mRecentsView == null || targetTask == null
-                ? LOG_NO_OP_PAGE_INDEX
-                : mRecentsView.indexOfChild(targetTask);
-    }
-
-    private void doLogGesture(GestureEndTarget endTarget, @Nullable TaskView targetTask,
-            int pageIndex) {
+    private void doLogGesture(GestureEndTarget endTarget, @Nullable TaskView targetTask) {
         StatsLogManager.EventEnum event;
         switch (endTarget) {
             case HOME:
@@ -1043,6 +1040,9 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
             // We probably never received an animation controller, skip logging.
             return;
         }
+        int pageIndex = endTarget == LAST_TASK
+                ? LOG_NO_OP_PAGE_INDEX
+                : mRecentsView.getNextPage();
         // TODO: set correct container using the pageIndex
         logger.log(event);
     }
@@ -1056,7 +1056,7 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
     }
 
     protected abstract HomeAnimationFactory createHomeAnimationFactory(
-            ArrayList<IBinder> launchCookies, long duration);
+            ArrayList<IBinder> launchCookies, long duration, boolean isTargetTranslucent);
 
     private final TaskStackChangeListener mActivityRestartListener = new TaskStackChangeListener() {
         @Override
@@ -1100,7 +1100,9 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
             final ArrayList<IBinder> cookies = runningTaskTarget != null
                     ? runningTaskTarget.taskInfo.launchCookies
                     : new ArrayList<>();
-            HomeAnimationFactory homeAnimFactory = createHomeAnimationFactory(cookies, duration);
+            boolean isTranslucent = runningTaskTarget != null && runningTaskTarget.isTranslucent;
+            HomeAnimationFactory homeAnimFactory =
+                    createHomeAnimationFactory(cookies, duration, isTranslucent);
             mIsSwipingPipToHome = homeAnimFactory.supportSwipePipToHome()
                     && runningTaskTarget != null
                     && runningTaskTarget.taskInfo.pictureInPictureParams != null
@@ -1133,6 +1135,7 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
                 windowAnim.start(mContext, velocityPxPerMs);
                 mRunningWindowAnim = RunningWindowAnim.wrap(windowAnim);
             }
+            homeAnimFactory.setSwipeVelocity(velocityPxPerMs.y);
             homeAnimFactory.playAtomicAnimation(velocityPxPerMs.y);
             mLauncherTransitionController = null;
 
@@ -1211,6 +1214,7 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
                 TaskInfoCompat.getWindowConfigurationBounds(taskInfo),
                 startBounds,
                 destinationBounds,
+                mRecentsView.getPipCornerRadius(),
                 mRecentsView);
         // We would assume home and app window always in the same rotation While homeRotation
         // is not ROTATION_0 (which implies the rotation is turned on in launcher settings).
@@ -1218,20 +1222,22 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
                 && (windowRotation == ROTATION_90 || windowRotation == ROTATION_270)) {
             swipePipToHomeAnimator.setFromRotation(mTaskViewSimulator, windowRotation);
         }
+        AnimatorPlaybackController activityAnimationToHome =
+                homeAnimFactory.createActivityAnimationToHome();
         swipePipToHomeAnimator.addListener(new AnimatorListenerAdapter() {
             private boolean mHasAnimationEnded;
             @Override
             public void onAnimationStart(Animator animation) {
                 if (mHasAnimationEnded) return;
-                // Ensure Launcher ends in NORMAL state, we intentionally skip other callbacks
-                // since they are not relevant in this swipe-pip-to-home case.
-                homeAnimFactory.createActivityAnimationToHome().dispatchOnStart();
+                // Ensure Launcher ends in NORMAL state
+                activityAnimationToHome.dispatchOnStart();
             }
 
             @Override
             public void onAnimationEnd(Animator animation) {
                 if (mHasAnimationEnded) return;
                 mHasAnimationEnded = true;
+                activityAnimationToHome.getAnimationPlayer().end();
                 if (mRecentsAnimationController == null) {
                     // If the recents animation is interrupted, we still end the running
                     // animation (not canceled) so this is still called. In that case, we can
@@ -1293,18 +1299,18 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
     }
 
     public void onConsumerAboutToBeSwitched() {
-        mConsumerIsSwitching = true;
         if (mActivity != null) {
             // In the off chance that the gesture ends before Launcher is started, we should clear
             // the callback here so that it doesn't update with the wrong state
             mActivity.clearRunOnceOnStartCallback();
+            resetLauncherListeners();
         }
         if (mGestureState.getEndTarget() != null && !mGestureState.isRunningAnimationToLauncher()) {
             cancelCurrentAnimation();
         } else {
             mStateCallback.setStateOnUiThread(STATE_FINISH_WITH_NO_END);
+            reset();
         }
-        reset();
     }
 
     public boolean isCanceled() {
@@ -1315,14 +1321,13 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
     private void resumeLastTask() {
         mRecentsAnimationController.finish(false /* toRecents */, null);
         ActiveGestureLog.INSTANCE.addLog("finishRecentsAnimation", false);
-        doLogGesture(LAST_TASK, null, getLogGestureTaskIndex(null));
+        doLogGesture(LAST_TASK, null);
         reset();
     }
 
     @UiThread
     private void startNewTask() {
         TaskView taskToLaunch = mRecentsView == null ? null : mRecentsView.getNextPageTaskView();
-        int taskPageIndex = getLogGestureTaskIndex(taskToLaunch);
         startNewTask(success -> {
             if (!success) {
                 reset();
@@ -1331,7 +1336,7 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
                 endLauncherTransitionController();
                 updateSysUiFlags(1 /* windowProgress == overview */);
             }
-            doLogGesture(NEW_TASK, taskToLaunch, taskPageIndex);
+            doLogGesture(NEW_TASK, taskToLaunch);
         });
     }
 
@@ -1365,39 +1370,28 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
     }
 
     private void invalidateHandler() {
-        if (!mConsumerIsSwitching) {
-            if (!LIVE_TILE.get() || !mActivityInterface.isInLiveTileMode()
-                    || mGestureState.getEndTarget() != RECENTS) {
-                mInputConsumerProxy.destroy();
-                mTaskAnimationManager.setLiveTileCleanUpHandler(null);
-            }
-            endRunningWindowAnim(false /* cancel */);
+        if (!LIVE_TILE.get() || !mActivityInterface.isInLiveTileMode()
+                || mGestureState.getEndTarget() != RECENTS) {
+            mInputConsumerProxy.destroy();
+            mTaskAnimationManager.setLiveTileCleanUpHandler(null);
+        }
+        mInputConsumerProxy.unregisterCallback();
+        endRunningWindowAnim(false /* cancel */);
 
-            if (mGestureEndCallback != null) {
-                mGestureEndCallback.run();
-            }
+        if (mGestureEndCallback != null) {
+            mGestureEndCallback.run();
         }
 
-        mInputConsumerProxy.unregisterCallback();
         mActivityInitListener.unregister();
         ActivityManagerWrapper.getInstance().unregisterTaskStackListener(mActivityRestartListener);
         mTaskSnapshot = null;
     }
 
     private void invalidateHandlerWithLauncher() {
-        if (!mConsumerIsSwitching) {
-            endLauncherTransitionController();
-            mRecentsView.onGestureAnimationEnd();
-        }
+        endLauncherTransitionController();
 
-        mRecentsView.removeOnScrollChangedListener(mOnRecentsScrollListener);
+        mRecentsView.onGestureAnimationEnd();
         resetLauncherListeners();
-
-        mHandler.post(() -> {
-            // Defer clearing the activity since invalidation can happen over multiple callbacks.
-            mActivity = null;
-            mRecentsView = null;
-        });
     }
 
     private void endLauncherTransitionController() {
@@ -1408,19 +1402,29 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
             mLauncherTransitionController.getNormalController().getAnimationPlayer().end();
             mLauncherTransitionController = null;
         }
+
+        if (mRecentsView != null) {
+            mRecentsView.abortScrollerAnimation();
+        }
     }
 
+    /**
+     * Unlike invalidateHandlerWithLauncher, this is called even when switching consumers, e.g. on
+     * continued quick switch gesture, which cancels the previous handler but doesn't invalidate it.
+     */
     private void resetLauncherListeners() {
         // Reset the callback for deferred activity launches
         if (!LIVE_TILE.get()) {
             mActivityInterface.setOnDeferredActivityLaunchCallback(null);
         }
         mActivity.getRootView().setOnApplyWindowInsetsListener(null);
+
+        mRecentsView.removeOnScrollChangedListener(mOnRecentsScrollListener);
     }
 
     private void resetStateForAnimationCancel() {
         boolean wasVisible = mWasLauncherAlreadyVisible || mGestureStarted;
-        mActivityInterface.onTransitionCancelled(wasVisible);
+        mActivityInterface.onTransitionCancelled(wasVisible, mGestureState.getEndTarget());
 
         // Leave the pending invisible flag, as it may be used by wallpaper open animation.
         if (mActivity != null) {
@@ -1495,6 +1499,9 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
     private void finishCurrentTransitionToRecents() {
         if (LIVE_TILE.get()) {
             mStateCallback.setStateOnUiThread(STATE_CURRENT_TASK_FINISHED);
+            if (mRecentsAnimationController != null) {
+                mRecentsAnimationController.detachNavigationBarFromApp(true);
+            }
         } else if (!hasTargets() || mRecentsAnimationController == null) {
             // If there are no targets or the animation not started, then there is nothing to finish
             mStateCallback.setStateOnUiThread(STATE_CURRENT_TASK_FINISHED);
@@ -1515,8 +1522,7 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
                     () -> mStateCallback.setStateOnUiThread(STATE_CURRENT_TASK_FINISHED));
         }
         ActiveGestureLog.INSTANCE.addLog("finishRecentsAnimation", true);
-        TaskView taskToLaunch = mRecentsView == null ? null : mRecentsView.getCurrentPageTaskView();
-        doLogGesture(HOME, taskToLaunch, getLogGestureTaskIndex(taskToLaunch));
+        doLogGesture(HOME, mRecentsView == null ? null : mRecentsView.getCurrentPageTaskView());
     }
 
     /**
@@ -1527,10 +1533,12 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
         if (mIsSwipingPipToHome && mSwipePipToHomeAnimator != null) {
             SystemUiProxy.INSTANCE.get(mContext).stopSwipePipToHome(
                     mSwipePipToHomeAnimator.getComponentName(),
-                    mSwipePipToHomeAnimator.getDestinationBounds());
+                    mSwipePipToHomeAnimator.getDestinationBounds(),
+                    mSwipePipToHomeAnimator.getContentOverlay());
             mRecentsAnimationController.setFinishTaskTransaction(
                     mSwipePipToHomeAnimator.getTaskId(),
-                    mSwipePipToHomeAnimator.getFinishTransaction());
+                    mSwipePipToHomeAnimator.getFinishTransaction(),
+                    mSwipePipToHomeAnimator.getContentOverlay());
             mIsSwipingPipToHome = false;
         }
     }
@@ -1538,8 +1546,10 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
     protected abstract void finishRecentsControllerToHome(Runnable callback);
 
     private void setupLauncherUiAfterSwipeUpToRecentsAnimation() {
+        if (mStateCallback.hasStates(STATE_HANDLER_INVALIDATED)) {
+            return;
+        }
         endLauncherTransitionController();
-        mActivityInterface.onSwipeUpToRecentsComplete();
         mRecentsView.onSwipeUpAnimationSuccess();
         if (LIVE_TILE.get()) {
             mTaskAnimationManager.setLiveTileCleanUpHandler(mInputConsumerProxy::destroy);
@@ -1547,8 +1557,7 @@ public abstract class AbsSwipeUpHandler<T extends StatefulActivity<S>,
         }
 
         SystemUiProxy.INSTANCE.get(mContext).onOverviewShown(false, TAG);
-        TaskView taskToLaunch = mRecentsView.getCurrentPageTaskView();
-        doLogGesture(RECENTS, taskToLaunch, getLogGestureTaskIndex(taskToLaunch));
+        doLogGesture(RECENTS, mRecentsView.getCurrentPageTaskView());
         reset();
     }
 

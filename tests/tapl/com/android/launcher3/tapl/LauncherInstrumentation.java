@@ -95,7 +95,6 @@ public final class LauncherInstrumentation {
     private static final String TAG = "Tapl";
     private static final int ZERO_BUTTON_STEPS_FROM_BACKGROUND_TO_HOME = 20;
     private static final int GESTURE_STEP_MS = 16;
-    private static long START_TIME = System.currentTimeMillis();
 
     private static final Pattern EVENT_TOUCH_DOWN = getTouchEventPattern("ACTION_DOWN");
     private static final Pattern EVENT_TOUCH_UP = getTouchEventPattern("ACTION_UP");
@@ -106,7 +105,8 @@ public final class LauncherInstrumentation {
     static final Pattern EVENT_TOUCH_DOWN_TIS = getTouchEventPatternTIS("ACTION_DOWN");
     static final Pattern EVENT_TOUCH_UP_TIS = getTouchEventPatternTIS("ACTION_UP");
     private final String mLauncherPackage;
-    private final boolean mIsLauncher3;
+    private Boolean mIsLauncher3;
+    private long mTestStartTime = -1;
 
     // Types for launcher containers that the user is interacting with. "Background" is a
     // pseudo-container corresponding to inactive launcher covered by another app.
@@ -206,7 +206,6 @@ public final class LauncherInstrumentation {
     public LauncherInstrumentation(Instrumentation instrumentation) {
         mInstrumentation = instrumentation;
         mDevice = UiDevice.getInstance(instrumentation);
-        mIsLauncher3 = "com.android.launcher3".equals(getLauncherPackageName());
 
         // Launcher should run in test harness so that custom accessibility protocol between
         // Launcher and TAPL is enabled. In-process tests enable this protocol with a direct call
@@ -422,6 +421,14 @@ public final class LauncherInstrumentation {
         mOnSettledStateAction = onSettledStateAction;
     }
 
+    public void onTestStart() {
+        mTestStartTime = System.currentTimeMillis();
+    }
+
+    public void onTestFinish() {
+        mTestStartTime = -1;
+    }
+
     private String formatSystemHealthMessage(String message) {
         final String testPackage = getContext().getPackageName();
 
@@ -430,16 +437,17 @@ public final class LauncherInstrumentation {
         mInstrumentation.getUiAutomation().grantRuntimePermission(
                 testPackage, "android.permission.PACKAGE_USAGE_STATS");
 
-        final String systemHealth = mSystemHealthSupplier != null
-                ? mSystemHealthSupplier.apply(START_TIME)
-                : TestHelpers.getSystemHealthMessage(getContext(), START_TIME);
+        if (mTestStartTime > 0) {
+            final String systemHealth = mSystemHealthSupplier != null
+                    ? mSystemHealthSupplier.apply(mTestStartTime)
+                    : TestHelpers.getSystemHealthMessage(getContext(), mTestStartTime);
 
-        if (systemHealth != null) {
-            return message
-                    + ",\nperhaps linked to system health problems:\n<<<<<<<<<<<<<<<<<<\n"
-                    + systemHealth + "\n>>>>>>>>>>>>>>>>>>";
+            if (systemHealth != null) {
+                return message
+                        + ";\nPerhaps linked to system health problems:\n<<<<<<<<<<<<<<<<<<\n"
+                        + systemHealth + "\n>>>>>>>>>>>>>>>>>>";
+            }
         }
-
         return message;
     }
 
@@ -450,7 +458,7 @@ public final class LauncherInstrumentation {
             if (checkEvents) {
                 final String eventMismatch = eventChecker.verify(0, false);
                 if (eventMismatch != null) {
-                    message = message + ", having produced " + eventMismatch;
+                    message = message + ";\n" + eventMismatch;
                 }
             } else {
                 eventChecker.finishNoWait();
@@ -487,12 +495,14 @@ public final class LauncherInstrumentation {
     private void fail(String message) {
         checkForAnomaly();
         Assert.fail(formatSystemHealthMessage(formatErrorWithEvents(
-                "http://go/tapl : " + getContextDescription() + message
-                        + " (visible state: " + getVisibleStateMessage() + ")", true)));
+                "http://go/tapl test failure:\nSummary: " + getContextDescription()
+                        + " - visible state is " + getVisibleStateMessage()
+                        + ";\nDetails: " + message, true)));
     }
 
     private String getContextDescription() {
-        return mDiagnosticContext.isEmpty() ? "" : String.join(", ", mDiagnosticContext) + "; ";
+        return mDiagnosticContext.isEmpty()
+                ? "(no context)" : String.join(", ", mDiagnosticContext);
     }
 
     void assertTrue(String message, boolean condition) {
@@ -1348,22 +1358,15 @@ public final class LauncherInstrumentation {
         getTestInfo(TestProtocol.REQUEST_DISABLE_DEBUG_TRACING);
     }
 
-    public int getTotalPssKb() {
-        return getTestInfo(TestProtocol.REQUEST_TOTAL_PSS_KB).
-                getInt(TestProtocol.TEST_INFO_RESPONSE_FIELD);
+    public void forceGc() {
+        // GC the system & sysui first before gc'ing launcher
+        logShellCommand("cmd statusbar run-gc");
+        getTestInfo(TestProtocol.REQUEST_FORCE_GC);
     }
 
     public Integer getPid() {
         final Bundle testInfo = getTestInfo(TestProtocol.REQUEST_PID);
         return testInfo != null ? testInfo.getInt(TestProtocol.TEST_INFO_RESPONSE_FIELD) : null;
-    }
-
-    public void produceJavaLeak() {
-        getTestInfo(TestProtocol.REQUEST_JAVA_LEAK);
-    }
-
-    public void produceNativeLeak() {
-        getTestInfo(TestProtocol.REQUEST_NATIVE_LEAK);
     }
 
     public void produceViewLeak() {
@@ -1418,6 +1421,9 @@ public final class LauncherInstrumentation {
     }
 
     boolean isLauncher3() {
+        if (mIsLauncher3 == null) {
+            mIsLauncher3 = "com.android.launcher3".equals(getLauncherPackageName());
+        }
         return mIsLauncher3;
     }
 

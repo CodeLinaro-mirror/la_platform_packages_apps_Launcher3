@@ -138,7 +138,7 @@ public abstract class AbstractLauncherUiTest {
         // Check whether activity leak detector has found leaked activities.
         Wait.atMost(AbstractLauncherUiTest::getActivityLeakErrorMessage,
                 () -> {
-                    launcher.getTotalPssKb();  // Triggers GC
+                    launcher.forceGc();
                     return MAIN_EXECUTOR.submit(
                             () -> ACTIVITY_LEAK_TRACKER.noLeakedActivities()).get();
                 }, DEFAULT_UI_TIMEOUT, launcher);
@@ -247,11 +247,26 @@ public abstract class AbstractLauncherUiTest {
         return mDevice;
     }
 
+    private boolean hasSystemUiObject(String resId) {
+        return mDevice.hasObject(By.res(SYSTEMUI_PACKAGE, resId));
+    }
+
     @Before
     public void setUp() throws Exception {
-        Assert.assertTrue("Keyguard is visible, which is likely caused by a crash in SysUI",
+        mLauncher.onTestStart();
+        Log.d(TAG, "Before disabling battery defender");
+        mDevice.executeShellCommand("setprop vendor.battery.defender.disable 1");
+        Log.d(TAG, "Before enabling stay awake");
+        mDevice.executeShellCommand("settings put global stay_on_while_plugged_in 3");
+        for (int i = 0; i < 10 && hasSystemUiObject("keyguard_status_view"); ++i) {
+            Log.d(TAG, "Before unlocking the phone");
+            mDevice.executeShellCommand("input keyevent 82");
+            mDevice.waitForIdle();
+        }
+        Assert.assertTrue("Keyguard still visible",
                 TestHelpers.wait(
                         Until.gone(By.res(SYSTEMUI_PACKAGE, "keyguard_status_view")), 60000));
+        Log.d(TAG, "Keyguard is not visible");
 
         final String launcherPackageName = mDevice.getLauncherPackageName();
         try {
@@ -288,13 +303,17 @@ public abstract class AbstractLauncherUiTest {
 
     @After
     public void verifyLauncherState() {
-        // Limits UI tests affecting tests running after them.
-        mLauncher.waitForLauncherInitialized();
-        if (mLauncherPid != 0) {
-            assertEquals("Launcher crashed, pid mismatch:",
-                    mLauncherPid, mLauncher.getPid().intValue());
+        try {
+            // Limits UI tests affecting tests running after them.
+            mLauncher.waitForLauncherInitialized();
+            if (mLauncherPid != 0) {
+                assertEquals("Launcher crashed, pid mismatch:",
+                        mLauncherPid, mLauncher.getPid().intValue());
+            }
+            checkDetectedLeaks(mLauncher);
+        } finally {
+            mLauncher.onTestFinish();
         }
-        checkDetectedLeaks(mLauncher);
     }
 
     protected void clearLauncherData() {

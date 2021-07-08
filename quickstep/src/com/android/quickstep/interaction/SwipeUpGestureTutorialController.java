@@ -43,7 +43,7 @@ import androidx.annotation.Nullable;
 import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.InvariantDeviceProfile;
 import com.android.launcher3.Utilities;
-import com.android.launcher3.anim.AnimationSuccessListener;
+import com.android.launcher3.anim.AnimatorListeners;
 import com.android.launcher3.anim.AnimatorPlaybackController;
 import com.android.launcher3.anim.PendingAnimation;
 import com.android.quickstep.AnimatedFloat;
@@ -72,7 +72,7 @@ abstract class SwipeUpGestureTutorialController extends TutorialController {
     private AnimatorListenerAdapter mResetTaskView = new AnimatorListenerAdapter() {
         @Override
         public void onAnimationEnd(Animator animation) {
-            mFakeLauncherView.setVisibility(View.INVISIBLE);
+            mFakeHotseatView.setVisibility(View.INVISIBLE);
             mFakeIconView.setVisibility(View.INVISIBLE);
             if (mTutorialFragment.getActivity() != null) {
                 DisplayMetrics displayMetrics =
@@ -156,7 +156,7 @@ abstract class SwipeUpGestureTutorialController extends TutorialController {
                         fadeAnim.setViewAlpha(mFakePreviousTaskView, 0, ACCEL);
                     }
                     if (onEndRunnable != null) {
-                        fadeAnim.addListener(AnimationSuccessListener.forRunnable(onEndRunnable));
+                        fadeAnim.addListener(AnimatorListeners.forSuccessCallback(onEndRunnable));
                     }
                     AnimatorSet animset = fadeAnim.buildAnim();
                     animset.setStartDelay(100);
@@ -174,7 +174,7 @@ abstract class SwipeUpGestureTutorialController extends TutorialController {
                 anim.setViewAlpha(mFakePreviousTaskView, 0, ACCEL);
             }
             if (onEndRunnable != null) {
-                anim.addListener(AnimationSuccessListener.forRunnable(onEndRunnable));
+                anim.addListener(AnimatorListeners.forSuccessCallback(onEndRunnable));
             }
         }
         AnimatorSet animset = anim.buildAnim();
@@ -197,7 +197,7 @@ abstract class SwipeUpGestureTutorialController extends TutorialController {
         hideFeedback(true);
         cancelRunningAnimation();
         mFakePreviousTaskView.setVisibility(View.INVISIBLE);
-        mFakeLauncherView.setVisibility(View.VISIBLE);
+        mFakeHotseatView.setVisibility(View.VISIBLE);
         mShowPreviousTasks = false;
         RectFSpringAnim rectAnim =
                 mTaskViewSwipeUpAnimation.handleSwipeUpToHome(finalVelocity);
@@ -205,16 +205,16 @@ abstract class SwipeUpGestureTutorialController extends TutorialController {
         PendingAnimation fadeAnim = new PendingAnimation(300);
         fadeAnim.setViewAlpha(mFakeIconView, 0, ACCEL);
         if (onEndRunnable != null) {
-            fadeAnim.addListener(AnimationSuccessListener.forRunnable(onEndRunnable));
+            fadeAnim.addListener(AnimatorListeners.forSuccessCallback(onEndRunnable));
         }
         AnimatorSet animset = fadeAnim.buildAnim();
-        rectAnim.addAnimatorListener(AnimationSuccessListener.forRunnable(animset::start));
+        rectAnim.addAnimatorListener(AnimatorListeners.forSuccessCallback(animset::start));
         mRunningWindowAnim = RunningWindowAnim.wrap(rectAnim);
     }
 
     @Override
     public void setNavBarGestureProgress(@Nullable Float displacement) {
-        if (mHideFeedbackEndAction != null) {
+        if (mGestureCompleted) {
             return;
         }
         if (displacement != null) {
@@ -238,7 +238,7 @@ abstract class SwipeUpGestureTutorialController extends TutorialController {
 
     @Override
     public void onMotionPaused(boolean unused) {
-        if (mHideFeedbackEndAction != null) {
+        if (mGestureCompleted) {
             return;
         }
         if (mShowTasks) {
@@ -299,7 +299,7 @@ abstract class SwipeUpGestureTutorialController extends TutorialController {
                 @Override
                 public RectF getWindowTargetRect() {
                     int fakeHomeIconSizePx = Utilities.dpToPx(60);
-                    int fakeHomeIconLeft = mFakeLauncherView.getLeft();
+                    int fakeHomeIconLeft = mFakeHotseatView.getLeft();
                     int fakeHomeIconTop = mDp.heightPx - Utilities.dpToPx(216);
                     return new RectF(fakeHomeIconLeft, fakeHomeIconTop,
                             fakeHomeIconLeft + fakeHomeIconSizePx,

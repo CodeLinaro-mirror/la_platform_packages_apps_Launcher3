@@ -124,6 +124,7 @@ import com.android.launcher3.dragndrop.DragController;
 import com.android.launcher3.dragndrop.DragLayer;
 import com.android.launcher3.dragndrop.DragOptions;
 import com.android.launcher3.dragndrop.DragView;
+import com.android.launcher3.dragndrop.LauncherDragController;
 import com.android.launcher3.folder.FolderGridOrganizer;
 import com.android.launcher3.folder.FolderIcon;
 import com.android.launcher3.icons.BitmapRenderer;
@@ -428,7 +429,7 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
         mIconCache = app.getIconCache();
         mAccessibilityDelegate = createAccessibilityDelegate();
 
-        mDragController = new DragController(this);
+        mDragController = new LauncherDragController(this);
         mAllAppsController = new AllAppsTransitionController(this);
         mStateManager = new StateManager<>(this, NORMAL);
 
@@ -554,21 +555,12 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
             onIdpChanged(mDeviceProfile.inv);
         }
 
-        if (TestProtocol.sDebugTracing) {
-            Log.d(TestProtocol.LAUNCHER_NOT_TRANSPOSED, "onConfigurationChanged: diff=" + diff);
-            Log.d(TestProtocol.LAUNCHER_NOT_TRANSPOSED, "newConfig=" + newConfig);
-            Log.d(TestProtocol.LAUNCHER_NOT_TRANSPOSED, "oldConfig=" + mOldConfig);
-        }
-
         mOldConfig.setTo(newConfig);
         super.onConfigurationChanged(newConfig);
     }
 
     @Override
     public void onIdpChanged(InvariantDeviceProfile idp) {
-        if (TestProtocol.sDebugTracing) {
-            Log.d(TestProtocol.LAUNCHER_NOT_TRANSPOSED, "onIdpChanged");
-        }
         initDeviceProfile(idp);
         dispatchDeviceProfileChanged();
         reapplyUi();
@@ -913,7 +905,7 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
         } else {
             mOverlayManager.onActivityStopped(this);
         }
-
+        hideKeyboard();
         logStopAndResume(false /* isResume */);
         mAppWidgetHost.setActivityStarted(false);
         NotificationListener.removeNotificationsChangedListener();
@@ -1315,8 +1307,15 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
             appWidgetInfo = mAppWidgetManager.getLauncherAppWidgetInfo(appWidgetId);
         }
 
+        if (hostView == null) {
+            // Perform actual inflation because we're live
+            hostView = mAppWidgetHost.createView(this, appWidgetId, appWidgetInfo);
+        }
+
         LauncherAppWidgetInfo launcherInfo;
-        launcherInfo = new LauncherAppWidgetInfo(appWidgetId, appWidgetInfo.provider);
+        launcherInfo =
+                new LauncherAppWidgetInfo(
+                        appWidgetId, appWidgetInfo.provider, appWidgetInfo, hostView);
         launcherInfo.spanX = itemInfo.spanX;
         launcherInfo.spanY = itemInfo.spanY;
         launcherInfo.minSpanX = itemInfo.minSpanX;
@@ -1326,10 +1325,6 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
         getModelWriter().addItemToDatabase(launcherInfo,
                 itemInfo.container, itemInfo.screenId, itemInfo.cellX, itemInfo.cellY);
 
-        if (hostView == null) {
-            // Perform actual inflation because we're live
-            hostView = mAppWidgetHost.createView(this, appWidgetId, appWidgetInfo);
-        }
         hostView.setVisibility(View.VISIBLE);
         prepareAppWidget(hostView, launcherInfo);
         mWorkspace.addInScreen(hostView, launcherInfo);
@@ -1346,14 +1341,7 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
     private final BroadcastReceiver mScreenOffReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            // Reset AllApps to its initial state only if we are not in the middle of
-            // processing a multi-step drop
-            if (mPendingRequestArgs == null) {
-                if (!isInState(NORMAL)) {
-                    onUiChangedWhileSleeping();
-                }
-                mStateManager.goToState(NORMAL);
-            }
+            onScreenOff();
         }
     };
 
@@ -1474,7 +1462,7 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
                 && AbstractFloatingView.getTopOpenView(this) == null;
         boolean isActionMain = Intent.ACTION_MAIN.equals(intent.getAction());
         boolean internalStateHandled = ACTIVITY_TRACKER.handleNewIntent(this, intent);
-
+        hideKeyboard();
         if (isActionMain) {
             if (!internalStateHandled) {
                 // In all these cases, only animate if we're already on home
@@ -1495,9 +1483,6 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
                     mWorkspace.post(mWorkspace::moveToDefaultScreen);
                 }
             }
-
-            // Handle HOME_INTENT
-            hideKeyboard();
 
             if (mLauncherCallbacks != null) {
                 mLauncherCallbacks.onHomeIntent(internalStateHandled);
@@ -1923,6 +1908,17 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
         }
     }
 
+    protected void onScreenOff() {
+        // Reset AllApps to its initial state only if we are not in the middle of
+        // processing a multi-step drop
+        if (mPendingRequestArgs == null) {
+            if (!isInState(NORMAL)) {
+                onUiChangedWhileSleeping();
+            }
+            mStateManager.goToState(NORMAL);
+        }
+    }
+
     @TargetApi(Build.VERSION_CODES.M)
     @Override
     protected boolean onErrorStartingShortcut(Intent intent, ItemInfo info) {
@@ -1946,13 +1942,6 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
 
     @Override
     public boolean startActivitySafely(View v, Intent intent, ItemInfo item) {
-        if (isViewInTaskbar(v)) {
-            // Start the activity without the hacky workarounds below, which assume the View was
-            // clicked when Launcher was resumed and will be hidden until Launcher is re-resumed
-            // (this isn't the case for Taskbar).
-            return super.startActivitySafely(v, intent, item);
-        }
-
         if (!hasBeenResumed()) {
             // Workaround an issue where the WM launch animation is clobbered when finishing the
             // recents animation into launcher. Defer launching the activity until Launcher is
@@ -2159,12 +2148,29 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
      */
     @Override
     public void bindItems(final List<ItemInfo> items, final boolean forceAnimateIcons) {
+        bindItems(items, forceAnimateIcons, /* focusFirstItemForAccessibility= */ false);
+    }
+
+
+    /**
+     * Bind the items start-end from the list.
+     *
+     * Implementation of the method from LauncherModel.Callbacks.
+     *
+     * @param focusFirstItemForAccessibility true iff the first item to be added to the workspace
+     *                                       should be focused for accessibility.
+     */
+    public void bindItems(
+            final List<ItemInfo> items,
+            final boolean forceAnimateIcons,
+            final boolean focusFirstItemForAccessibility) {
         // Get the list of added items and intersect them with the set of items here
         final Collection<Animator> bounceAnims = new ArrayList<>();
         final boolean animateIcons = forceAnimateIcons && canRunNewAppsAnimation();
         Workspace workspace = mWorkspace;
         int newItemsScreenId = -1;
         int end = items.size();
+        View newView = null;
         for (int i = 0; i < end; i++) {
             final ItemInfo item = items.get(i);
 
@@ -2229,12 +2235,25 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
                 bounceAnims.add(createNewAppBounceAnimation(view, i));
                 newItemsScreenId = item.screenId;
             }
+
+            if (newView == null) {
+                newView = view;
+            }
         }
 
-        // Animate to the correct page
+        View viewToFocus = newView;
+        // Animate to the correct pager
         if (animateIcons && newItemsScreenId > -1) {
             AnimatorSet anim = new AnimatorSet();
             anim.playTogether(bounceAnims);
+            if (focusFirstItemForAccessibility && viewToFocus != null) {
+                anim.addListener(new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        viewToFocus.sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_FOCUSED);
+                    }
+                });
+            }
 
             int currentScreenId = mWorkspace.getScreenIdForPageIndex(mWorkspace.getNextPage());
             final int newScreenIndex = mWorkspace.getPageIndexForScreenId(newItemsScreenId);
@@ -2257,6 +2276,8 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
             } else {
                 mWorkspace.postDelayed(startBounceAnimRunnable, NEW_APPS_ANIMATION_DELAY);
             }
+        } else if (focusFirstItemForAccessibility && viewToFocus != null) {
+            viewToFocus.sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_FOCUSED);
         }
         workspace.requestLayout();
     }
@@ -2776,7 +2797,7 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
      * @see LauncherState#getOverviewScaleAndOffset(Launcher)
      */
     public float[] getNormalOverviewScaleAndOffset() {
-        return new float[] {NO_SCALE, NO_OFFSET, NO_OFFSET};
+        return new float[] {NO_SCALE, NO_OFFSET};
     }
 
     /**
@@ -2830,13 +2851,6 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
                 .alpha(0f)
                 .withEndAction(() -> getRootView().removeView(crossFadeHelper))
                 .start();
-    }
-
-    /**
-     * @return Whether the View is in the same window as the Taskbar window.
-     */
-    public boolean isViewInTaskbar(View v) {
-        return false;
     }
 
     public boolean supportsAdaptiveIconAnimation(View clickedView) {

@@ -19,8 +19,9 @@ import static com.android.launcher3.LauncherState.BACKGROUND_APP;
 import static com.android.launcher3.LauncherState.NORMAL;
 import static com.android.launcher3.LauncherState.OVERVIEW;
 import static com.android.launcher3.LauncherState.QUICK_SWITCH;
+import static com.android.launcher3.anim.AnimatorListeners.forEndCallback;
 import static com.android.launcher3.anim.Interpolators.LINEAR;
-import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_IME_SHOWING;
+import static com.android.launcher3.util.Executors.MAIN_EXECUTOR;
 
 import android.animation.Animator;
 import android.animation.AnimatorSet;
@@ -40,7 +41,7 @@ import com.android.launcher3.anim.PendingAnimation;
 import com.android.launcher3.statehandlers.DepthController;
 import com.android.launcher3.statehandlers.DepthController.ClampedDepthProperty;
 import com.android.launcher3.statemanager.StateManager;
-import com.android.launcher3.taskbar.TaskbarController;
+import com.android.launcher3.taskbar.LauncherTaskbarUIController;
 import com.android.launcher3.touch.PagedOrientationHandler;
 import com.android.quickstep.GestureState.GestureEndTarget;
 import com.android.quickstep.SysUINavigationMode.Mode;
@@ -83,9 +84,13 @@ public final class LauncherActivityInterface extends
         if (launcher == null) {
             return;
         }
-        // Ensure recents is at the correct position for NORMAL state. For example, when we detach
-        // recents, we assume the first task is invisible, making translation off by one task.
-        launcher.getStateManager().reapplyState();
+        // When going to home, the state animator we use has SKIP_OVERVIEW because we assume that
+        // setRecentsAttachedToAppWindow() will handle animating Overview instead. Thus, at the end
+        // of the animation, we should ensure recents is at the correct position for NORMAL state.
+        // For example, when doing a long swipe to home, RecentsView may be scaled down. This is
+        // relatively expensive, so do it on the next frame instead of critical path.
+        MAIN_EXECUTOR.getHandler().post(launcher.getStateManager()::reapplyState);
+
         launcher.getRootView().setForceHideBackArrow(false);
         notifyRecentsOfOrientation(deviceState.getRotationTouchHelper());
     }
@@ -158,13 +163,12 @@ public final class LauncherActivityInterface extends
     }
 
     @Nullable
-    @Override
-    public TaskbarController getTaskbarController() {
+    private LauncherTaskbarUIController getTaskbarController() {
         BaseQuickstepLauncher launcher = getCreatedActivity();
         if (launcher == null) {
             return null;
         }
-        return launcher.getTaskbarController();
+        return launcher.getTaskbarUIController();
     }
 
     @Nullable
@@ -192,7 +196,8 @@ public final class LauncherActivityInterface extends
 
         closeOverlay();
         launcher.getStateManager().goToState(OVERVIEW,
-                launcher.getStateManager().shouldAnimateStateChange(), onCompleteCallback);
+                launcher.getStateManager().shouldAnimateStateChange(),
+                onCompleteCallback == null ? null : forEndCallback(onCompleteCallback));
         return true;
     }
 
@@ -271,13 +276,13 @@ public final class LauncherActivityInterface extends
     @Override
     public @Nullable Animator getParallelAnimationToLauncher(GestureEndTarget endTarget,
             long duration) {
-        TaskbarController taskbarController = getTaskbarController();
+        LauncherTaskbarUIController uiController = getTaskbarController();
         Animator superAnimator = super.getParallelAnimationToLauncher(endTarget, duration);
-        if (taskbarController == null) {
+        if (uiController == null) {
             return superAnimator;
         }
         LauncherState toState = stateFromGestureEndTarget(endTarget);
-        Animator taskbarAnimator = taskbarController.createAnimToLauncher(toState, duration);
+        Animator taskbarAnimator = uiController.createAnimToLauncher(toState, duration);
         if (superAnimator == null) {
             return taskbarAnimator;
         } else {
@@ -294,31 +299,21 @@ public final class LauncherActivityInterface extends
     }
 
     @Override
-    public void onSystemUiFlagsChanged(int systemUiStateFlags) {
-        TaskbarController taskbarController = getTaskbarController();
-        if (taskbarController == null) {
-            return;
-        }
-        boolean isImeVisible = (systemUiStateFlags & SYSUI_STATE_IME_SHOWING) != 0;
-        taskbarController.setIsImeVisible(isImeVisible);
-    }
-
-    @Override
     public boolean deferStartingActivity(RecentsAnimationDeviceState deviceState, MotionEvent ev) {
-        TaskbarController taskbarController = getTaskbarController();
-        if (taskbarController == null) {
+        LauncherTaskbarUIController uiController = getTaskbarController();
+        if (uiController == null) {
             return super.deferStartingActivity(deviceState, ev);
         }
-        return taskbarController.isEventOverAnyTaskbarItem(ev);
+        return uiController.isEventOverAnyTaskbarItem(ev);
     }
 
     @Override
     public boolean shouldCancelCurrentGesture() {
-        TaskbarController taskbarController = getTaskbarController();
-        if (taskbarController == null) {
+        LauncherTaskbarUIController uiController = getTaskbarController();
+        if (uiController == null) {
             return super.shouldCancelCurrentGesture();
         }
-        return taskbarController.isDraggingItem();
+        return uiController.isDraggingItem();
     }
 
     @Override

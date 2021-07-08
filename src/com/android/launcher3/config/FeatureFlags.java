@@ -88,7 +88,7 @@ public final class FeatureFlags {
             "ENABLE_QUICKSTEP_LIVE_TILE", true, "Enable live tile in Quickstep overview");
 
     public static final BooleanFlag ENABLE_QUICKSTEP_WIDGET_APP_START = getDebugFlag(
-            "ENABLE_QUICKSTEP_WIDGET_APP_START", false,
+            "ENABLE_QUICKSTEP_WIDGET_APP_START", true,
             "Enable Quickstep animation when launching activities from an app widget");
 
     // Keep as DeviceFlag to allow remote disable in emergency.
@@ -142,7 +142,7 @@ public final class FeatureFlags {
             "MULTI_DB_GRID_MIRATION_ALGO", true, "Use the multi-db grid migration algorithm");
 
     public static final BooleanFlag ENABLE_THEMED_ICONS = getDebugFlag(
-            "ENABLE_THEMED_ICONS", false, "Enable themed icons on workspace");
+            "ENABLE_THEMED_ICONS", true, "Enable themed icons on workspace");
 
     // Keep as DeviceFlag for remote disable in emergency.
     public static final BooleanFlag ENABLE_OVERVIEW_SELECTIONS = new DeviceFlag(
@@ -174,12 +174,12 @@ public final class FeatureFlags {
             "Replace Smartspace with the enhanced version. "
                     + "Ignored if ENABLE_SMARTSPACE_UNIVERSAL is enabled.");
 
-    public static final BooleanFlag ENABLE_SMARTSPACE_FEEDBACK = new DeviceFlag(
+    public static final BooleanFlag ENABLE_SMARTSPACE_FEEDBACK = getDebugFlag(
             "ENABLE_SMARTSPACE_FEEDBACK", true,
             "Adds a menu option to send feedback for Enhanced Smartspace.");
 
-    public static final BooleanFlag ENABLE_SMARTSPACE_DISMISS = new DeviceFlag(
-            "ENABLE_SMARTSPACE_DISMISS", false,
+    public static final BooleanFlag ENABLE_SMARTSPACE_DISMISS = getDebugFlag(
+            "ENABLE_SMARTSPACE_DISMISS", true,
             "Adds a menu option to dismiss the current Enhanced Smartspace card.");
 
     public static final BooleanFlag ALWAYS_USE_HARDWARE_OPTIMIZATION_FOR_FOLDER_ANIMATIONS =

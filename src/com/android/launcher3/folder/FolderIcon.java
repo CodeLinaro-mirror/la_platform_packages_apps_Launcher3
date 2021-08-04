@@ -113,7 +113,7 @@ public class FolderIcon extends FrameLayout implements FolderListener, IconLabel
     FolderGridOrganizer mPreviewVerifier;
     ClippedFolderIconLayoutRule mPreviewLayoutRule;
     private PreviewItemManager mPreviewItemManager;
-    private PreviewItemDrawingParams mTmpParams = new PreviewItemDrawingParams(0, 0, 0, 0);
+    private PreviewItemDrawingParams mTmpParams = new PreviewItemDrawingParams(0, 0, 0);
     private List<WorkspaceItemInfo> mCurrentPreviewItems = new ArrayList<>();
 
     boolean mAnimating = false;
@@ -174,8 +174,6 @@ public class FolderIcon extends FrameLayout implements FolderListener, IconLabel
         folder.setFolderIcon(icon);
         folder.bind(folderInfo);
         icon.setFolder(folder);
-        icon.mBackground.paddingY = icon.isInHotseat()
-                ? 0 : activityContext.getDeviceProfile().cellYPaddingPx;
         return icon;
     }
 
@@ -198,7 +196,7 @@ public class FolderIcon extends FrameLayout implements FolderListener, IconLabel
         icon.mFolderName.setText(folderInfo.title);
         icon.mFolderName.setCompoundDrawablePadding(0);
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) icon.mFolderName.getLayoutParams();
-        lp.topMargin = grid.cellYPaddingPx + grid.iconSizePx + grid.iconDrawablePaddingPx;
+        lp.topMargin = grid.iconSizePx + grid.iconDrawablePaddingPx;
 
         icon.setTag(folderInfo);
         icon.setOnClickListener(ItemClickHandler.INSTANCE);
@@ -217,7 +215,6 @@ public class FolderIcon extends FrameLayout implements FolderListener, IconLabel
 
         icon.setAccessibilityDelegate(activity.getAccessibilityDelegate());
 
-        icon.mBackground.paddingY = icon.isInHotseat() ? 0 : grid.cellYPaddingPx;
         icon.mPreviewVerifier = new FolderGridOrganizer(activity.getDeviceProfile().inv);
         icon.mPreviewVerifier.setFolderInfo(folderInfo);
         icon.updatePreviewItems(false);
@@ -391,7 +388,7 @@ public class FolderIcon extends FrameLayout implements FolderListener, IconLabel
             to.offset(center[0] - animateView.getMeasuredWidth() / 2,
                     center[1] - animateView.getMeasuredHeight() / 2);
 
-            float finalAlpha = index < MAX_NUM_ITEMS_IN_PREVIEW ? 0.5f : 0f;
+            float finalAlpha = index < MAX_NUM_ITEMS_IN_PREVIEW ? 1f : 0f;
 
             float finalScale = scale * scaleRelativeToDragLayer;
 
@@ -402,15 +399,18 @@ public class FolderIcon extends FrameLayout implements FolderListener, IconLabel
                 finalScale *= containerScale;
             }
 
+            final int finalIndex = index;
             dragLayer.animateView(animateView, from, to, finalAlpha,
                     1, 1, finalScale, finalScale, DROP_IN_ANIMATION_DURATION,
                     Interpolators.DEACCEL_2, Interpolators.ACCEL_2,
-                    null, DragLayer.ANIMATION_END_DISAPPEAR, null);
+                    () -> {
+                        mPreviewItemManager.hidePreviewItem(finalIndex, false);
+                        mFolder.showItem(item);
+                    }, DragLayer.ANIMATION_END_DISAPPEAR, null);
 
             mFolder.hideItem(item);
 
             if (!itemAdded) mPreviewItemManager.hidePreviewItem(index, true);
-            final int finalIndex = index;
 
             FolderNameInfos nameInfos = new FolderNameInfos();
             if (FeatureFlags.FOLDER_NAME_SUGGEST.get()) {
@@ -430,8 +430,6 @@ public class FolderIcon extends FrameLayout implements FolderListener, IconLabel
     private void showFinalView(int finalIndex, final WorkspaceItemInfo item,
             FolderNameInfos nameInfos, InstanceId instanceId) {
         postDelayed(() -> {
-            mPreviewItemManager.hidePreviewItem(finalIndex, false);
-            mFolder.showItem(item);
             setLabelSuggestion(nameInfos, instanceId);
             invalidate();
         }, DROP_IN_ANIMATION_DURATION);
@@ -579,7 +577,6 @@ public class FolderIcon extends FrameLayout implements FolderListener, IconLabel
     public void setFolderBackground(PreviewBackground bg) {
         mBackground = bg;
         mBackground.setInvalidateDelegate(this);
-        mBackground.paddingY = isInHotseat() ? 0 : mActivity.getDeviceProfile().cellYPaddingPx;
     }
 
     @Override
@@ -614,10 +611,7 @@ public class FolderIcon extends FrameLayout implements FolderListener, IconLabel
 
         if (mCurrentPreviewItems.isEmpty() && !mAnimating) return;
 
-        final int saveCount = canvas.save();
-        canvas.clipPath(mBackground.getClipPath());
         mPreviewItemManager.draw(canvas);
-        canvas.restoreToCount(saveCount);
 
         if (!mBackground.drawingDelegated()) {
             mBackground.drawBackgroundStroke(canvas);

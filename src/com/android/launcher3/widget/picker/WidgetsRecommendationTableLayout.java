@@ -15,9 +15,12 @@
  */
 package com.android.launcher3.widget.picker;
 
+import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_WIDGETS_PREDICTION;
+
 import android.content.Context;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.util.Size;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -33,6 +36,7 @@ import com.android.launcher3.LauncherAppState;
 import com.android.launcher3.R;
 import com.android.launcher3.model.WidgetItem;
 import com.android.launcher3.widget.WidgetCell;
+import com.android.launcher3.widget.util.WidgetSizes;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,8 +47,8 @@ public final class WidgetsRecommendationTableLayout extends TableLayout {
     private static final float DOWN_SCALE_RATIO = 0.9f;
     private static final float MAX_DOWN_SCALE_RATIO = 0.5f;
     private final float mWidgetsRecommendationTableVerticalPadding;
+    private final float mWidgetCellVerticalPadding;
     private final float mWidgetCellTextViewsHeight;
-    private final float mWidgetPreviewPadding;
 
     private float mRecommendationTableMaxHeight = Float.MAX_VALUE;
     @Nullable private OnLongClickListener mWidgetCellOnLongClickListener;
@@ -59,10 +63,10 @@ public final class WidgetsRecommendationTableLayout extends TableLayout {
         super(context, attrs);
         // There are 1 row for title, 1 row for dimension and 2 rows for description.
         mWidgetsRecommendationTableVerticalPadding = 2 * getResources()
+                .getDimensionPixelSize(R.dimen.recommended_widgets_table_vertical_padding);
+        mWidgetCellVerticalPadding = 2 * getResources()
                 .getDimensionPixelSize(R.dimen.widget_cell_vertical_padding);
         mWidgetCellTextViewsHeight = 4 * getResources().getDimension(R.dimen.widget_cell_font_size);
-        mWidgetPreviewPadding = 2 * getResources()
-                .getDimensionPixelSize(R.dimen.widget_preview_shortcut_padding);
     }
 
     /** Sets a {@link android.view.View.OnLongClickListener} for all widget cells in this table. */
@@ -130,6 +134,7 @@ public final class WidgetsRecommendationTableLayout extends TableLayout {
         previewContainer.setOnClickListener(mWidgetCellOnClickListener);
         previewContainer.setOnLongClickListener(mWidgetCellOnLongClickListener);
         widget.setAnimatePreview(false);
+        widget.setSourceContainer(CONTAINER_WIDGETS_PREDICTION);
 
         parent.addView(widget);
         return widget;
@@ -149,9 +154,12 @@ public final class WidgetsRecommendationTableLayout extends TableLayout {
             List<WidgetItem> widgetItems = recommendedWidgetsInTable.get(i);
             float rowHeight = 0;
             for (int j = 0; j < widgetItems.size(); j++) {
-                float previewHeight = widgetItems.get(j).spanY * deviceProfile.cellHeightPx
-                        * previewScale + mWidgetPreviewPadding;
-                rowHeight = Math.max(rowHeight, previewHeight + mWidgetCellTextViewsHeight);
+                WidgetItem widgetItem = widgetItems.get(j);
+                Size widgetSize = WidgetSizes.getWidgetItemSizePx(getContext(), deviceProfile,
+                        widgetItem);
+                float previewHeight = widgetSize.getHeight() * previewScale;
+                rowHeight = Math.max(rowHeight,
+                        previewHeight + mWidgetCellTextViewsHeight + mWidgetCellVerticalPadding);
             }
             totalHeight += rowHeight;
         }

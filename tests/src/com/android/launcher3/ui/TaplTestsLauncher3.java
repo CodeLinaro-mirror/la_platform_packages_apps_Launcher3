@@ -36,6 +36,7 @@ import com.android.launcher3.tapl.AppIconMenu;
 import com.android.launcher3.tapl.AppIconMenuItem;
 import com.android.launcher3.tapl.Widgets;
 import com.android.launcher3.tapl.Workspace;
+import com.android.launcher3.util.rule.ScreenRecordRule.ScreenRecord;
 import com.android.launcher3.views.OptionsPopupView;
 import com.android.launcher3.widget.picker.WidgetsFullSheet;
 import com.android.launcher3.widget.picker.WidgetsRecyclerView;
@@ -92,6 +93,7 @@ public class TaplTestsLauncher3 extends AbstractLauncherUiTest {
     }
 
     @Test
+    @ScreenRecord //b/187080582
     public void testDevicePressMenu() throws Exception {
         mDevice.pressMenu();
         mDevice.waitForIdle();
@@ -293,7 +295,7 @@ public class TaplTestsLauncher3 extends AbstractLauncherUiTest {
         try {
             final AppIconMenu menu = allApps.
                     getAppIcon(APP_NAME).
-                    openMenu();
+                    openDeepShortcutMenu();
 
             executeOnLauncher(
                     launcher -> assertTrue("Launcher internal state didn't switch to Showing Menu",
@@ -341,7 +343,7 @@ public class TaplTestsLauncher3 extends AbstractLauncherUiTest {
         try {
             final AppIconMenu menu = allApps
                     .getAppIcon(APP_NAME)
-                    .openMenu();
+                    .openDeepShortcutMenu();
             final AppIconMenuItem menuItem0 = menu.getMenuItem(0);
             final AppIconMenuItem menuItem2 = menu.getMenuItem(2);
 

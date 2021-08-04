@@ -23,7 +23,6 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.widget.TableLayout;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -53,6 +52,7 @@ public class WidgetsRecyclerView extends BaseRecyclerView implements OnItemTouch
     private HeaderViewDimensionsProvider mHeaderViewDimensionsProvider;
     private int mLastVisibleWidgetContentTableHeight = 0;
     private int mWidgetHeaderHeight = 0;
+    private final int mSpacingBetweenEntries;
     @Nullable private OnContentChangeListener mOnContentChangeListener;
 
     public WidgetsRecyclerView(Context context) {
@@ -71,6 +71,10 @@ public class WidgetsRecyclerView extends BaseRecyclerView implements OnItemTouch
 
         ActivityContext activity = ActivityContext.lookupContext(getContext());
         DeviceProfile grid = activity.getDeviceProfile();
+
+        // The spacing used between entries.
+        mSpacingBetweenEntries =
+                getResources().getDimensionPixelSize(R.dimen.widget_list_entry_spacing);
     }
 
     @Override
@@ -78,29 +82,15 @@ public class WidgetsRecyclerView extends BaseRecyclerView implements OnItemTouch
         super.onFinishInflate();
         // create a layout manager with Launcher's context so that scroll position
         // can be preserved during screen rotation.
-        setLayoutManager(new LinearLayoutManager(getContext()));
+        WidgetsListLayoutManager layoutManager = new WidgetsListLayoutManager(getContext());
+        layoutManager.setOnContentChangeListener(mOnContentChangeListener);
+        setLayoutManager(layoutManager);
     }
 
     @Override
     public void setAdapter(Adapter adapter) {
         super.setAdapter(adapter);
         mAdapter = (WidgetsListAdapter) adapter;
-    }
-
-    @Override
-    public void onChildAttachedToWindow(@NonNull View child) {
-        super.onChildAttachedToWindow(child);
-        if (mOnContentChangeListener != null) {
-            mOnContentChangeListener.onContentChanged();
-        }
-    }
-
-    @Override
-    public void onChildDetachedFromWindow(@NonNull View child) {
-        super.onChildDetachedFromWindow(child);
-        if (mOnContentChangeListener != null) {
-            mOnContentChangeListener.onContentChanged();
-        }
     }
 
     /**
@@ -182,10 +172,7 @@ public class WidgetsRecyclerView extends BaseRecyclerView implements OnItemTouch
                     && mLastVisibleWidgetContentTableHeight == 0
                     && view.getMeasuredHeight() > 0) {
                 // This assumes all header views are of the same height.
-                RecyclerView.LayoutParams layoutParams =
-                        (RecyclerView.LayoutParams) view.getLayoutParams();
-                mWidgetHeaderHeight = view.getMeasuredHeight() + layoutParams.topMargin
-                    + layoutParams.bottomMargin;
+                mWidgetHeaderHeight = view.getMeasuredHeight();
             }
         }
 
@@ -266,6 +253,10 @@ public class WidgetsRecyclerView extends BaseRecyclerView implements OnItemTouch
 
     public void setOnContentChangeListener(@Nullable OnContentChangeListener listener) {
         mOnContentChangeListener = listener;
+        WidgetsListLayoutManager layoutManager = (WidgetsListLayoutManager) getLayoutManager();
+        if (layoutManager != null) {
+            layoutManager.setOnContentChangeListener(listener);
+        }
     }
 
     /**
@@ -285,6 +276,11 @@ public class WidgetsRecyclerView extends BaseRecyclerView implements OnItemTouch
             if (entry instanceof WidgetsListHeaderEntry
                     || entry instanceof WidgetsListSearchHeaderEntry) {
                 totalItemsHeight += mWidgetHeaderHeight;
+                if (i > 0) {
+                    // Each header contains the spacing between entries as top decoration, except
+                    // the first one.
+                    totalItemsHeight += mSpacingBetweenEntries;
+                }
             } else if (entry instanceof WidgetsListContentEntry) {
                 totalItemsHeight += mLastVisibleWidgetContentTableHeight;
             } else {

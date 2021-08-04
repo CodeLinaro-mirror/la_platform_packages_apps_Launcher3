@@ -34,7 +34,6 @@ import static com.android.launcher3.anim.Interpolators.TOUCH_RESPONSE_INTERPOLAT
 import static com.android.launcher3.anim.Interpolators.clampToProgress;
 import static com.android.launcher3.config.FeatureFlags.ENABLE_QUICKSTEP_LIVE_TILE;
 import static com.android.launcher3.statehandlers.DepthController.DEPTH;
-import static com.android.quickstep.util.NavigationModeFeatureFlag.LIVE_TILE;
 import static com.android.systemui.shared.system.RemoteAnimationTargetCompat.MODE_CLOSING;
 import static com.android.systemui.shared.system.RemoteAnimationTargetCompat.MODE_OPENING;
 
@@ -155,7 +154,7 @@ public final class TaskViewUtils {
         boolean isRunningTask = v.isRunningTask();
         TransformParams params = null;
         TaskViewSimulator tsv = null;
-        if (LIVE_TILE.get() && isRunningTask) {
+        if (ENABLE_QUICKSTEP_LIVE_TILE.get() && isRunningTask) {
             params = v.getRecentsView().getLiveTileParams();
             tsv = v.getRecentsView().getLiveTileTaskViewSimulator();
         }
@@ -176,7 +175,8 @@ public final class TaskViewUtils {
         boolean isQuickSwitch = v.isEndQuickswitchCuj();
         v.setEndQuickswitchCuj(false);
 
-        boolean inLiveTileMode = LIVE_TILE.get() && v.getRecentsView().getRunningTaskIndex() != -1;
+        boolean inLiveTileMode =
+                ENABLE_QUICKSTEP_LIVE_TILE.get() && v.getRecentsView().getRunningTaskIndex() != -1;
         final RemoteAnimationTargets targets =
                 new RemoteAnimationTargets(appTargets, wallpaperTargets, nonAppTargets,
                         inLiveTileMode ? MODE_CLOSING : MODE_OPENING);
@@ -249,7 +249,7 @@ public final class TaskViewUtils {
                             ANIMATION_NAV_FADE_IN_DURATION, NAV_FADE_IN_INTERPOLATOR);
 
                     @Override
-                    public void onUpdate(float percent) {
+                    public void onUpdate(float percent, boolean initOnly) {
                         final SurfaceParams.Builder navBuilder =
                                 new SurfaceParams.Builder(navBarTarget.leash);
                         if (mNavFadeIn.value > mNavFadeIn.getStartValue()) {
@@ -263,6 +263,14 @@ public final class TaskViewUtils {
                         finalParams.applySurfaceParams(navBuilder.build());
                     }
                 });
+            } else if (inLiveTileMode) {
+                // There is no transition animation for app launch from recent in live tile mode so
+                // we have to trigger the navigation bar animation from system here.
+                final RecentsAnimationController controller =
+                        recentsView.getRecentsAnimationController();
+                if (controller != null) {
+                    controller.animateNavigationBarToApp(RECENTS_LAUNCH_DURATION);
+                }
             }
             topMostSimulator = tsv;
         }
@@ -523,7 +531,7 @@ public final class TaskViewUtils {
             };
         }
         pa.add(launcherAnim);
-        if (LIVE_TILE.get() && recentsView.getRunningTaskIndex() != -1) {
+        if (ENABLE_QUICKSTEP_LIVE_TILE.get() && recentsView.getRunningTaskIndex() != -1) {
             pa.addOnFrameCallback(recentsView::redrawLiveTile);
         }
         anim.play(pa.buildAnim());

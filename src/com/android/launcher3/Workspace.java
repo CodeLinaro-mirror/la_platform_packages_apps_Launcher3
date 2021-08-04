@@ -114,6 +114,7 @@ import com.android.launcher3.widget.PendingAddWidgetInfo;
 import com.android.launcher3.widget.PendingAppWidgetHostView;
 import com.android.launcher3.widget.WidgetManagerHelper;
 import com.android.launcher3.widget.dragndrop.AppWidgetHostViewDragListener;
+import com.android.launcher3.widget.util.WidgetSizes;
 import com.android.systemui.plugins.shared.LauncherOverlayManager.LauncherOverlay;
 
 import java.util.ArrayList;
@@ -1785,8 +1786,11 @@ public class Workspace extends PagedView<WorkspacePageIndicator>
             onDropExternal(touchXY, dropTargetLayout, d);
         } else {
             final View cell = mDragInfo.cell;
+            final DragView dragView = d.dragView;
             boolean droppedOnOriginalCellDuringTransition = false;
-            Runnable onCompleteRunnable = null;
+            Runnable onCompleteRunnable = dragView::resumeColorExtraction;
+
+            dragView.disableColorExtraction();
 
             if (dropTargetLayout != null && !d.cancelled) {
                 // Move internally
@@ -1854,7 +1858,7 @@ public class Workspace extends PagedView<WorkspacePageIndicator>
                     item.spanX = resultSpan[0];
                     item.spanY = resultSpan[1];
                     AppWidgetHostView awhv = (AppWidgetHostView) cell;
-                    AppWidgetResizeFrame.updateWidgetSizeRanges(awhv, mLauncher, resultSpan[0],
+                    WidgetSizes.updateWidgetSizeRanges(awhv, mLauncher, resultSpan[0],
                             resultSpan[1]);
                 }
 
@@ -1897,7 +1901,9 @@ public class Workspace extends PagedView<WorkspacePageIndicator>
                         AppWidgetProviderInfo pInfo = hostView.getAppWidgetInfo();
                         if (pInfo != null && pInfo.resizeMode != AppWidgetProviderInfo.RESIZE_NONE
                                 && !options.isAccessibleDrag) {
+                            final Runnable previousRunnable = onCompleteRunnable;
                             onCompleteRunnable = () -> {
+                                previousRunnable.run();
                                 if (!isPageInTransition()) {
                                     AppWidgetResizeFrame.showForWidget(hostView, cellLayout);
                                 }
@@ -1920,6 +1926,11 @@ public class Workspace extends PagedView<WorkspacePageIndicator>
                     mTargetCell[1] = lp.cellY;
                     CellLayout layout = (CellLayout) cell.getParent().getParent();
                     layout.markCellsAsOccupiedForView(cell);
+                }
+            } else {
+                // When drag is cancelled, reattach content view back to its original parent.
+                if (mDragInfo.cell instanceof LauncherAppWidgetHostView) {
+                    d.dragView.detachContentView(/* reattachToPreviousParent= */ true);
                 }
             }
 
@@ -1961,7 +1972,7 @@ public class Workspace extends PagedView<WorkspacePageIndicator>
             parent.onDropChild(cell);
 
             mLauncher.getStateManager().goToState(NORMAL, SPRING_LOADED_EXIT_DELAY,
-                    onCompleteRunnable == null ? null : forSuccessCallback(onCompleteRunnable));
+                    forSuccessCallback(onCompleteRunnable));
             mStatsLogManager.logger().withItemInfo(d.dragInfo).withInstanceId(d.logInstanceId)
                     .log(LauncherEvent.LAUNCHER_ITEM_DROP_COMPLETED);
         }
@@ -2528,8 +2539,7 @@ public class Workspace extends PagedView<WorkspacePageIndicator>
                     ((PendingAddWidgetInfo) pendingInfo).boundWidget : null;
 
             if (finalView != null && updateWidgetSize) {
-                AppWidgetResizeFrame.updateWidgetSizeRanges(finalView, mLauncher, item.spanX,
-                        item.spanY);
+                WidgetSizes.updateWidgetSizeRanges(finalView, mLauncher, item.spanX, item.spanY);
             }
 
             int animationStyle = ANIMATE_INTO_POSITION_AND_DISAPPEAR;
@@ -2786,6 +2796,10 @@ public class Workspace extends PagedView<WorkspacePageIndicator>
                 removeWorkspaceItem(mDragInfo.cell);
             }
         } else if (mDragInfo != null) {
+            // When drag is cancelled, reattach content view back to its original parent.
+            if (mDragInfo.cell instanceof LauncherAppWidgetHostView && d.dragView != null) {
+                d.dragView.detachContentView(/* reattachToPreviousParent= */ true);
+            }
             final CellLayout cellLayout = mLauncher.getCellLayout(
                     mDragInfo.container, mDragInfo.screenId);
             if (cellLayout != null) {

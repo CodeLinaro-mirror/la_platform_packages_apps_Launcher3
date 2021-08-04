@@ -16,11 +16,11 @@
 
 package com.android.launcher3.widget;
 
+import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_BOTTOM_WIDGETS_TRAY;
 import static com.android.launcher3.anim.Interpolators.FAST_OUT_SLOW_IN;
 
 import android.animation.PropertyValuesHolder;
 import android.content.Context;
-import android.content.res.Configuration;
 import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.util.IntProperty;
@@ -37,7 +37,6 @@ import android.widget.TableRow;
 import android.widget.TextView;
 
 import com.android.launcher3.DeviceProfile;
-import com.android.launcher3.Insettable;
 import com.android.launcher3.LauncherAppState;
 import com.android.launcher3.R;
 import com.android.launcher3.anim.PendingAnimation;
@@ -51,7 +50,8 @@ import java.util.List;
 /**
  * Bottom sheet for the "Widgets" system shortcut in the long-press popup.
  */
-public class WidgetsBottomSheet extends BaseWidgetSheet implements Insettable {
+public class WidgetsBottomSheet extends BaseWidgetSheet {
+    private static final String TAG = "WidgetsBottomSheet";
 
     private static final IntProperty<View> PADDING_BOTTOM =
             new IntProperty<View>("paddingBottom") {
@@ -71,10 +71,8 @@ public class WidgetsBottomSheet extends BaseWidgetSheet implements Insettable {
     private static final long EDUCATION_TIP_DELAY_MS = 300;
 
     private ItemInfo mOriginalItemInfo;
-    private Rect mInsets;
     private final int mMaxTableHeight;
     private int mMaxHorizontalSpan = 4;
-    private Configuration mCurrentConfiguration;
 
     private final OnLayoutChangeListener mLayoutChangeListenerToShowTips =
             new OnLayoutChangeListener() {
@@ -112,37 +110,57 @@ public class WidgetsBottomSheet extends BaseWidgetSheet implements Insettable {
     public WidgetsBottomSheet(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         setWillNotDraw(false);
-        mInsets = new Rect();
-        mContent = this;
         DeviceProfile deviceProfile = mActivityContext.getDeviceProfile();
         // Set the max table height to 2 / 3 of the grid height so that the bottom picker won't
         // take over the entire view vertically.
         mMaxTableHeight = deviceProfile.inv.numRows * 2 / 3  * deviceProfile.cellHeightPx;
-        mCurrentConfiguration = new Configuration(getResources().getConfiguration());
         if (!hasSeenEducationTip()) {
             addOnLayoutChangeListener(mLayoutChangeListenerToShowTips);
         }
     }
 
     @Override
+    protected void onFinishInflate() {
+        super.onFinishInflate();
+        mContent = findViewById(R.id.widgets_bottom_sheet);
+    }
+
+    @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        doMeasure(widthMeasureSpec, heightMeasureSpec);
+        if (updateMaxSpansPerRow()) {
+            doMeasure(widthMeasureSpec, heightMeasureSpec);
+        }
+    }
+
+    /** Returns {@code true} if the max spans have been updated. */
+    private boolean updateMaxSpansPerRow() {
+        if (getMeasuredWidth() == 0) return false;
 
         int paddingPx = 2 * getResources().getDimensionPixelOffset(
                 R.dimen.widget_cell_horizontal_padding);
         int maxHorizontalSpan = findViewById(R.id.widgets_table).getMeasuredWidth()
                 / (mActivityContext.getDeviceProfile().cellWidthPx + paddingPx);
-
         if (mMaxHorizontalSpan != maxHorizontalSpan) {
             // Ensure the table layout is showing widgets in the right column after measure.
             mMaxHorizontalSpan = maxHorizontalSpan;
             onWidgetsBound();
+            return true;
         }
+        return false;
     }
 
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
-        super.onLayout(changed, l, t, r, b);
+        int width = r - l;
+        int height = b - t;
+
+        // Content is laid out as center bottom aligned.
+        int contentWidth = mContent.getMeasuredWidth();
+        int contentLeft = (width - contentWidth - mInsets.left - mInsets.right) / 2 + mInsets.left;
+        mContent.layout(contentLeft, height - mContent.getMeasuredHeight(),
+                contentLeft + contentWidth, height);
+
         setTranslationShift(mTranslationShift);
 
         // Ensure the scroll view height is not larger than mMaxTableHeight, which is a value
@@ -212,6 +230,7 @@ public class WidgetsBottomSheet extends BaseWidgetSheet implements Insettable {
         previewContainer.setOnClickListener(this);
         previewContainer.setOnLongClickListener(this);
         widget.setAnimatePreview(false);
+        widget.setSourceContainer(CONTAINER_BOTTOM_WIDGETS_TRAY);
 
         parent.addView(widget);
         return widget;
@@ -241,20 +260,15 @@ public class WidgetsBottomSheet extends BaseWidgetSheet implements Insettable {
 
     @Override
     public void setInsets(Rect insets) {
-        // Extend behind left, right, and bottom insets.
-        int leftInset = insets.left - mInsets.left;
-        int rightInset = insets.right - mInsets.right;
-        int bottomInset = insets.bottom - mInsets.bottom;
-        mInsets.set(insets);
-        setPadding(leftInset, getPaddingTop(), rightInset, bottomInset);
-    }
+        super.setInsets(insets);
 
-    @Override
-    protected void onConfigurationChanged(Configuration newConfig) {
-        if (mCurrentConfiguration.orientation != newConfig.orientation) {
-            mInsets.setEmpty();
+        mContent.setPadding(mContent.getPaddingStart(),
+                mContent.getPaddingTop(), mContent.getPaddingEnd(), insets.bottom);
+        if (insets.bottom > 0) {
+            setupNavBarColor();
+        } else {
+            clearNavBarColor();
         }
-        mCurrentConfiguration.updateFrom(newConfig);
     }
 
     @Override

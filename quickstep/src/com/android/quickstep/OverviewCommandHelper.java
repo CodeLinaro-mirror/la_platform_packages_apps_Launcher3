@@ -15,6 +15,7 @@
  */
 package com.android.quickstep;
 
+import static com.android.launcher3.config.FeatureFlags.ENABLE_QUICKSTEP_LIVE_TILE;
 import static com.android.launcher3.util.Executors.MAIN_EXECUTOR;
 import static com.android.quickstep.util.ActiveGestureLog.INTENT_EXTRA_LOG_TRACE_ID;
 
@@ -184,9 +185,7 @@ public class OverviewCommandHelper {
                 .newHandler(gestureState, cmd.createTime);
         interactionHandler.setGestureEndCallback(
                 () -> onTransitionComplete(cmd, interactionHandler));
-
-        Intent intent = new Intent(interactionHandler.getLaunchIntent());
-        interactionHandler.initWhenReady(intent);
+        interactionHandler.initWhenReady();
 
         RecentsAnimationListener recentAnimListener = new RecentsAnimationListener() {
             @Override
@@ -212,6 +211,7 @@ public class OverviewCommandHelper {
             cmd.mActiveCallbacks.addListener(recentAnimListener);
             mTaskAnimationManager.notifyRecentsAnimationState(recentAnimListener);
         } else {
+            Intent intent = new Intent(interactionHandler.getLaunchIntent());
             intent.putExtra(INTENT_EXTRA_LOG_TRACE_ID, gestureState.getGestureId());
             cmd.mActiveCallbacks = mTaskAnimationManager.startRecentsAnimation(
                     gestureState, intent, interactionHandler);

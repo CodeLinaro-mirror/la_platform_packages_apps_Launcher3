@@ -15,11 +15,11 @@
  */
 package com.android.quickstep;
 
+import static com.android.launcher3.config.FeatureFlags.ENABLE_QUICKSTEP_LIVE_TILE;
 import static com.android.launcher3.util.Executors.MAIN_EXECUTOR;
 import static com.android.launcher3.util.Executors.UI_HELPER_EXECUTOR;
 import static com.android.quickstep.GestureState.STATE_RECENTS_ANIMATION_INITIALIZED;
 import static com.android.quickstep.GestureState.STATE_RECENTS_ANIMATION_STARTED;
-import static com.android.quickstep.util.NavigationModeFeatureFlag.LIVE_TILE;
 
 import android.app.ActivityManager;
 import android.content.Context;
@@ -39,6 +39,7 @@ import com.android.systemui.shared.system.ActivityOptionsCompat;
 import com.android.systemui.shared.system.RemoteAnimationTargetCompat;
 import com.android.systemui.shared.system.RemoteTransitionCompat;
 import com.android.systemui.shared.system.TaskStackChangeListener;
+import com.android.systemui.shared.system.TaskStackChangeListeners;
 
 public class TaskAnimationManager implements RecentsAnimationCallbacks.RecentsAnimationListener {
     public static final boolean ENABLE_SHELL_TRANSITIONS =
@@ -58,17 +59,17 @@ public class TaskAnimationManager implements RecentsAnimationCallbacks.RecentsAn
         public void onActivityRestartAttempt(ActivityManager.RunningTaskInfo task,
                 boolean homeTaskVisible, boolean clearedTask, boolean wasVisible) {
             if (mLastGestureState == null) {
-                ActivityManagerWrapper.getInstance().unregisterTaskStackListener(
+                TaskStackChangeListeners.getInstance().unregisterTaskStackListener(
                         mLiveTileRestartListener);
                 return;
             }
             BaseActivityInterface activityInterface = mLastGestureState.getActivityInterface();
-            if (LIVE_TILE.get() && activityInterface.isInLiveTileMode()
+            if (ENABLE_QUICKSTEP_LIVE_TILE.get() && activityInterface.isInLiveTileMode()
                     && activityInterface.getCreatedActivity() != null) {
                 RecentsView recentsView = activityInterface.getCreatedActivity().getOverviewPanel();
                 if (recentsView != null) {
                     recentsView.launchSideTaskInLiveTileModeForRestartedApp(task.taskId);
-                    ActivityManagerWrapper.getInstance().unregisterTaskStackListener(
+                    TaskStackChangeListeners.getInstance().unregisterTaskStackListener(
                             mLiveTileRestartListener);
                 }
             }
@@ -93,7 +94,6 @@ public class TaskAnimationManager implements RecentsAnimationCallbacks.RecentsAn
     @UiThread
     public RecentsAnimationCallbacks startRecentsAnimation(GestureState gestureState,
             Intent intent, RecentsAnimationCallbacks.RecentsAnimationListener listener) {
-        Log.d("b/186444448", "startRecentsAnimation");
         // Notify if recents animation is still running
         if (mController != null) {
             String msg = "New recents animation started before old animation completed";
@@ -138,14 +138,16 @@ public class TaskAnimationManager implements RecentsAnimationCallbacks.RecentsAn
             @Override
             public void onTaskAppeared(RemoteAnimationTargetCompat appearedTaskTarget) {
                 BaseActivityInterface activityInterface = mLastGestureState.getActivityInterface();
-                if (LIVE_TILE.get() && activityInterface.isInLiveTileMode()
+                if (ENABLE_QUICKSTEP_LIVE_TILE.get() && activityInterface.isInLiveTileMode()
                         && activityInterface.getCreatedActivity() != null) {
                     RecentsView recentsView =
                             activityInterface.getCreatedActivity().getOverviewPanel();
                     if (recentsView != null) {
                         RemoteAnimationTargetCompat[] apps = new RemoteAnimationTargetCompat[1];
                         apps[0] = appearedTaskTarget;
-                        recentsView.launchSideTaskInLiveTileMode(appearedTaskTarget.taskId, apps);
+                        recentsView.launchSideTaskInLiveTileMode(appearedTaskTarget.taskId, apps,
+                                new RemoteAnimationTargetCompat[0] /* wallpaper */,
+                                new RemoteAnimationTargetCompat[0] /* nonApps */);
                         return;
                     }
                 }
@@ -197,7 +199,7 @@ public class TaskAnimationManager implements RecentsAnimationCallbacks.RecentsAn
     }
 
     public void enableLiveTileRestartListener() {
-        ActivityManagerWrapper.getInstance().registerTaskStackListener(mLiveTileRestartListener);
+        TaskStackChangeListeners.getInstance().registerTaskStackListener(mLiveTileRestartListener);
     }
 
     /**
@@ -241,7 +243,7 @@ public class TaskAnimationManager implements RecentsAnimationCallbacks.RecentsAn
             mLiveTileCleanUpHandler.run();
             mLiveTileCleanUpHandler = null;
         }
-        ActivityManagerWrapper.getInstance().unregisterTaskStackListener(mLiveTileRestartListener);
+        TaskStackChangeListeners.getInstance().unregisterTaskStackListener(mLiveTileRestartListener);
 
         // Release all the target leashes
         if (mTargets != null) {

@@ -51,6 +51,7 @@ import com.android.launcher3.views.ActivityContext;
 public class PreviewBackground extends CellLayout.DelegatedCellDrawing {
 
     private static final boolean DRAW_SHADOW = false;
+    private static final boolean DRAW_STROKE = false;
 
     private static final int CONSUMPTION_ANIMATION_DURATION = 100;
 
@@ -76,7 +77,6 @@ public class PreviewBackground extends CellLayout.DelegatedCellDrawing {
     int previewSize;
     int basePreviewOffsetX;
     int basePreviewOffsetY;
-    int paddingY;
 
     private CellLayout mDrawingDelegate;
 
@@ -160,7 +160,7 @@ public class PreviewBackground extends CellLayout.DelegatedCellDrawing {
         previewSize = grid.folderIconSizePx;
 
         basePreviewOffsetX = (availableSpaceX - previewSize) / 2;
-        basePreviewOffsetY = paddingY + topPadding + grid.folderIconOffsetYPx;
+        basePreviewOffsetY = topPadding + grid.folderIconOffsetYPx;
 
         // Stroke width is 1dp
         mStrokeWidth = context.getResources().getDisplayMetrics().density;
@@ -303,6 +303,10 @@ public class PreviewBackground extends CellLayout.DelegatedCellDrawing {
     }
 
     public void animateBackgroundStroke() {
+        if (!DRAW_STROKE) {
+            return;
+        }
+
         if (mStrokeAlphaAnimator != null) {
             mStrokeAlphaAnimator.cancel();
         }
@@ -319,6 +323,9 @@ public class PreviewBackground extends CellLayout.DelegatedCellDrawing {
     }
 
     public void drawBackgroundStroke(Canvas canvas) {
+        if (!DRAW_STROKE) {
+            return;
+        }
         mPaint.setColor(setColorAlphaBound(mStrokeColor, mStrokeAlpha));
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(mStrokeWidth);
@@ -363,7 +370,7 @@ public class PreviewBackground extends CellLayout.DelegatedCellDrawing {
         }
 
         mDrawingDelegate = null;
-        isClipping = true;
+        isClipping = false;
         invalidate();
     }
 

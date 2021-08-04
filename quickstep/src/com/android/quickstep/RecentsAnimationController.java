@@ -18,6 +18,7 @@ package com.android.quickstep;
 import static com.android.launcher3.util.Executors.MAIN_EXECUTOR;
 import static com.android.launcher3.util.Executors.UI_HELPER_EXECUTOR;
 
+import android.view.IRecentsAnimationController;
 import android.view.SurfaceControl;
 import android.window.PictureInPictureSurfaceTransaction;
 
@@ -155,11 +156,35 @@ public class RecentsAnimationController {
     }
 
     /**
+     * @see IRecentsAnimationController#cleanupScreenshot()
+     */
+    @UiThread
+    public void cleanupScreenshot() {
+        UI_HELPER_EXECUTOR.execute(() -> mController.cleanupScreenshot());
+    }
+
+    /**
      * @see RecentsAnimationControllerCompat#detachNavigationBarFromApp
      */
     @UiThread
     public void detachNavigationBarFromApp(boolean moveHomeToTop) {
         UI_HELPER_EXECUTOR.execute(() -> mController.detachNavigationBarFromApp(moveHomeToTop));
+    }
+
+    /**
+     * @see IRecentsAnimationController#animateNavigationBarToApp(long)
+     */
+    @UiThread
+    public void animateNavigationBarToApp(long duration) {
+        UI_HELPER_EXECUTOR.execute(() -> mController.animateNavigationBarToApp(duration));
+    }
+
+    /**
+     * @see IRecentsAnimationController#setWillFinishToHome(boolean)
+     */
+    @UiThread
+    public void setWillFinishToHome(boolean willFinishToHome) {
+        UI_HELPER_EXECUTOR.execute(() -> mController.setWillFinishToHome(willFinishToHome));
     }
 
     /**

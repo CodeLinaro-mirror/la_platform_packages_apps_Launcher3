@@ -78,6 +78,9 @@ public final class FeatureFlags {
     public static final BooleanFlag UNSTABLE_SPRINGS = getDebugFlag(
             "UNSTABLE_SPRINGS", false, "Enable unstable springs for quickstep animations");
 
+    public static final BooleanFlag ENABLE_LOCAL_COLOR_POPUPS = getDebugFlag(
+            "ENABLE_LOCAL_COLOR_POPUPS", false, "Enable local color extraction for popups.");
+
     public static final BooleanFlag KEYGUARD_ANIMATION = getDebugFlag(
             "KEYGUARD_ANIMATION", false, "Enable animation for keyguard going away on wallpaper");
 
@@ -93,11 +96,18 @@ public final class FeatureFlags {
 
     // Keep as DeviceFlag to allow remote disable in emergency.
     public static final BooleanFlag ENABLE_SUGGESTED_ACTIONS_OVERVIEW = new DeviceFlag(
-            "ENABLE_SUGGESTED_ACTIONS_OVERVIEW", true, "Show chip hints on the overview screen");
+            "ENABLE_SUGGESTED_ACTIONS_OVERVIEW", false, "Show chip hints on the overview screen");
 
 
     public static final BooleanFlag ENABLE_DEVICE_SEARCH = new DeviceFlag(
             "ENABLE_DEVICE_SEARCH", true, "Allows on device search in all apps");
+
+    public static final BooleanFlag ENABLE_DEVICE_SEARCH_PERFORMANCE_LOGGING = new DeviceFlag(
+            "ENABLE_DEVICE_SEARCH_PERFORMANCE_LOGGING", true,
+            "Allows on device search in all apps logging");
+
+    public static final BooleanFlag IME_STICKY_SNACKBAR_EDU = getDebugFlag(
+            "IME_STICKY_SNACKBAR_EDU", true, "Show sticky IME edu in AllApps");
 
     public static final BooleanFlag ENABLE_PEOPLE_TILE_PREVIEW = getDebugFlag(
             "ENABLE_PEOPLE_TILE_PREVIEW", false,
@@ -110,10 +120,6 @@ public final class FeatureFlags {
     public static final BooleanFlag FOLDER_NAME_MAJORITY_RANKING = getDebugFlag(
             "FOLDER_NAME_MAJORITY_RANKING", true,
             "Suggests folder names based on majority based ranking.");
-
-    public static final BooleanFlag APP_SEARCH_IMPROVEMENTS = new DeviceFlag(
-            "APP_SEARCH_IMPROVEMENTS", true,
-            "Adds localized title and keyword search and ranking");
 
     public static final BooleanFlag ENABLE_PREDICTION_DISMISS = getDebugFlag(
             "ENABLE_PREDICTION_DISMISS", true, "Allow option to dimiss apps from predicted list");
@@ -223,6 +229,10 @@ public final class FeatureFlags {
     public static final BooleanFlag ENABLE_TWO_PANEL_HOME = getDebugFlag(
             "ENABLE_TWO_PANEL_HOME", false,
             "Uses two panel on home screen. Only applicable on large screen devices.");
+
+    public static final BooleanFlag ENABLE_SCRIM_FOR_APP_LAUNCH = getDebugFlag(
+            "ENABLE_SCRIM_FOR_APP_LAUNCH", false,
+            "Enables scrim during app launch animation.");
 
     public static final BooleanFlag ENABLE_SPLIT_SELECT = getDebugFlag(
             "ENABLE_SPLIT_SELECT", false, "Uses new split screen selection overview UI");

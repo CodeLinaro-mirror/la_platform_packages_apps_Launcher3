@@ -36,10 +36,16 @@ import org.mockito.MockitoAnnotations;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 @RunWith(RobolectricTestRunner.class)
 public final class LauncherAppWidgetProviderInfoTest {
 
     private static final int CELL_SIZE = 50;
+    private static final int NUM_OF_COLS = 4;
+    private static final int NUM_OF_ROWS = 5;
 
     private Context mContext;
 
@@ -76,6 +82,33 @@ public final class LauncherAppWidgetProviderInfoTest {
     }
 
     @Test
+    public void
+            initSpans_minWidthLargerThanGridColumns_shouldInitializeSpansToAtMostTheGridColumns() {
+        LauncherAppWidgetProviderInfo info = new LauncherAppWidgetProviderInfo();
+        info.minWidth = CELL_SIZE * (NUM_OF_COLS + 1);
+        info.minHeight = 20;
+        InvariantDeviceProfile idp = createIDP();
+
+        info.initSpans(mContext, idp);
+
+        assertThat(info.spanX).isEqualTo(NUM_OF_COLS);
+        assertThat(info.spanY).isEqualTo(1);
+    }
+
+    @Test
+    public void initSpans_minHeightLargerThanGridRows_shouldInitializeSpansToAtMostTheGridRows() {
+        LauncherAppWidgetProviderInfo info = new LauncherAppWidgetProviderInfo();
+        info.minWidth = 20;
+        info.minHeight = 50 * (NUM_OF_ROWS + 1);
+        InvariantDeviceProfile idp = createIDP();
+
+        info.initSpans(mContext, idp);
+
+        assertThat(info.spanX).isEqualTo(1);
+        assertThat(info.spanY).isEqualTo(NUM_OF_ROWS);
+    }
+
+    @Test
     public void initSpans_minResizeWidthUnspecified_shouldInitializeMinSpansToOne() {
         LauncherAppWidgetProviderInfo info = new LauncherAppWidgetProviderInfo();
         InvariantDeviceProfile idp = createIDP();
@@ -89,6 +122,8 @@ public final class LauncherAppWidgetProviderInfoTest {
     @Test
     public void initSpans_minResizeWidthSmallerThanCellWidth_shouldInitializeMinSpansToOne() {
         LauncherAppWidgetProviderInfo info = new LauncherAppWidgetProviderInfo();
+        info.minWidth = 100;
+        info.minHeight = 100;
         info.minResizeWidth = 20;
         info.minResizeHeight = 20;
         InvariantDeviceProfile idp = createIDP();
@@ -102,6 +137,8 @@ public final class LauncherAppWidgetProviderInfoTest {
     @Test
     public void initSpans_minResizeWidthLargerThanCellWidth_shouldInitializeMinSpans() {
         LauncherAppWidgetProviderInfo info = new LauncherAppWidgetProviderInfo();
+        info.minWidth = 100;
+        info.minHeight = 100;
         info.minResizeWidth = 80;
         info.minResizeHeight = 80;
         InvariantDeviceProfile idp = createIDP();
@@ -124,6 +161,8 @@ public final class LauncherAppWidgetProviderInfoTest {
         Mockito.when(dp.shouldInsetWidgets()).thenReturn(true);
 
         LauncherAppWidgetProviderInfo info = new LauncherAppWidgetProviderInfo();
+        info.minWidth = CELL_SIZE * 3;
+        info.minHeight = CELL_SIZE * 3;
         info.minResizeWidth = CELL_SIZE * 2 + maxPadding;
         info.minResizeHeight = CELL_SIZE * 2 + maxPadding;
 
@@ -144,6 +183,8 @@ public final class LauncherAppWidgetProviderInfoTest {
         dp.cellLayoutBorderSpacingPx = maxPadding - 1;
         Mockito.when(dp.shouldInsetWidgets()).thenReturn(false);
         LauncherAppWidgetProviderInfo info = new LauncherAppWidgetProviderInfo();
+        info.minWidth = CELL_SIZE * 3;
+        info.minHeight = CELL_SIZE * 3;
         info.minResizeWidth = CELL_SIZE * 2 + maxPadding;
         info.minResizeHeight = CELL_SIZE * 2 + maxPadding;
 
@@ -151,6 +192,65 @@ public final class LauncherAppWidgetProviderInfoTest {
 
         assertThat(info.minSpanX).isEqualTo(3);
         assertThat(info.minSpanY).isEqualTo(3);
+    }
+
+    @Test
+    public void
+            initSpans_minResizeWidthHeightLargerThanMinWidth_shouldUseMinWidthHeightAsMinSpans() {
+        LauncherAppWidgetProviderInfo info = new LauncherAppWidgetProviderInfo();
+        info.minWidth = 20;
+        info.minHeight = 20;
+        info.minResizeWidth = 80;
+        info.minResizeHeight = 80;
+        InvariantDeviceProfile idp = createIDP();
+
+        info.initSpans(mContext, idp);
+
+        assertThat(info.minSpanX).isEqualTo(1);
+        assertThat(info.minSpanY).isEqualTo(1);
+    }
+
+    @Test
+    public void isMinSizeFulfilled_minWidthAndHeightWithinGridSize_shouldReturnTrue() {
+        LauncherAppWidgetProviderInfo info = new LauncherAppWidgetProviderInfo();
+        info.minWidth = 80;
+        info.minHeight = 80;
+        info.minResizeWidth = 50;
+        info.minResizeHeight = 50;
+        InvariantDeviceProfile idp = createIDP();
+
+        info.initSpans(mContext, idp);
+
+        assertThat(info.isMinSizeFulfilled()).isTrue();
+    }
+
+    @Test
+    public void
+            isMinSizeFulfilled_minWidthAndMinResizeWidthExceededGridColumns_shouldReturnFalse() {
+        LauncherAppWidgetProviderInfo info = new LauncherAppWidgetProviderInfo();
+        info.minWidth = CELL_SIZE * (NUM_OF_COLS + 2);
+        info.minHeight = 80;
+        info.minResizeWidth = CELL_SIZE * (NUM_OF_COLS + 1);
+        info.minResizeHeight = 50;
+        InvariantDeviceProfile idp = createIDP();
+
+        info.initSpans(mContext, idp);
+
+        assertThat(info.isMinSizeFulfilled()).isFalse();
+    }
+
+    @Test
+    public void isMinSizeFulfilled_minHeightAndMinResizeHeightExceededGridRows_shouldReturnFalse() {
+        LauncherAppWidgetProviderInfo info = new LauncherAppWidgetProviderInfo();
+        info.minWidth = 80;
+        info.minHeight = CELL_SIZE * (NUM_OF_ROWS + 2);
+        info.minResizeWidth = 50;
+        info.minResizeHeight = CELL_SIZE * (NUM_OF_ROWS + 1);
+        InvariantDeviceProfile idp = createIDP();
+
+        info.initSpans(mContext, idp);
+
+        assertThat(info.isMinSizeFulfilled()).isFalse();
     }
 
     private InvariantDeviceProfile createIDP() {
@@ -162,8 +262,11 @@ public final class LauncherAppWidgetProviderInfoTest {
         Mockito.when(profile.getCellSize()).thenReturn(new Point(CELL_SIZE, CELL_SIZE));
 
         InvariantDeviceProfile idp = new InvariantDeviceProfile();
-        idp.supportedProfiles.add(profile);
+        List<DeviceProfile> supportedProfiles = new ArrayList<>(idp.supportedProfiles);
+        supportedProfiles.add(profile);
+        idp.supportedProfiles = Collections.unmodifiableList(supportedProfiles);
+        idp.numColumns = NUM_OF_COLS;
+        idp.numRows = NUM_OF_ROWS;
         return idp;
     }
-
 }

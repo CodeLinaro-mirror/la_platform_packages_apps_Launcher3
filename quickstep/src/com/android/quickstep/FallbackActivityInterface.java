@@ -15,6 +15,7 @@
  */
 package com.android.quickstep;
 
+import static com.android.launcher3.config.FeatureFlags.ENABLE_QUICKSTEP_LIVE_TILE;
 import static com.android.quickstep.SysUINavigationMode.Mode.NO_BUTTON;
 import static com.android.quickstep.fallback.RecentsState.BACKGROUND_APP;
 import static com.android.quickstep.fallback.RecentsState.DEFAULT;
@@ -73,6 +74,11 @@ public final class FallbackActivityInterface extends
         // set to zero prior to this class becoming active.
     }
 
+    @Override
+    public void onOneHandedModeStateChanged(boolean activated) {
+        // Do nothing for FallbackActivityInterface
+    }
+
     /** 6 */
     @Override
     public AnimationFactory prepareRecentsUI(RecentsAnimationDeviceState deviceState,
@@ -100,8 +106,12 @@ public final class FallbackActivityInterface extends
     @Override
     public RecentsView getVisibleRecentsView() {
         RecentsActivity activity = getCreatedActivity();
-        if (activity != null && activity.hasBeenResumed()) {
-            return activity.getOverviewPanel();
+        if (activity != null) {
+            RecentsView recentsView = activity.getOverviewPanel();
+            if (activity.hasBeenResumed() || (ENABLE_QUICKSTEP_LIVE_TILE.get() && isInLiveTileMode()
+                    && recentsView.getRunningTaskId() == -1)) {
+                return recentsView;
+            }
         }
         return null;
     }

@@ -122,7 +122,8 @@ public final class Utilities {
 
     public static final boolean ATLEAST_R = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R;
 
-    public static final boolean ATLEAST_S = BuildCompat.isAtLeastS();
+    public static final boolean ATLEAST_S = BuildCompat.isAtLeastS()
+            || Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
 
     /**
      * Set on a motion event dispatched from the nav bar. See {@link MotionEvent#setEdgeFlags(int)}.
@@ -395,6 +396,13 @@ public final class Utilities {
         }
         float progress = getProgress(t, fromMin, fromMax);
         return mapRange(interpolator.getInterpolation(progress), toMin, toMax);
+    }
+
+    /** Bounds t between a lower and upper bound and maps the result to a range. */
+    public static float mapBoundToRange(float t, float lowerBound, float upperBound,
+            float toMin, float toMax, Interpolator interpolator) {
+        return mapToRange(boundToRange(t, lowerBound, upperBound), lowerBound, upperBound,
+                toMin, toMax, interpolator);
     }
 
     public static float getProgress(float current, float min, float max) {

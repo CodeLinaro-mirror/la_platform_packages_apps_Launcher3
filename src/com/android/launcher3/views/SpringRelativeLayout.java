@@ -93,7 +93,7 @@ public class SpringRelativeLayout extends RelativeLayout {
         invalidate();
     }
 
-    protected void onRelease() {
+    public void onRelease() {
         mEdgeGlowBottom.onRelease();
     }
 
@@ -105,11 +105,8 @@ public class SpringRelativeLayout extends RelativeLayout {
 
         @NonNull @Override
         protected EdgeEffect createEdgeEffect(RecyclerView view, int direction) {
-            switch (direction) {
-                case DIRECTION_TOP:
-                    return new EdgeEffectProxy(getContext(), mEdgeGlowTop);
-                case DIRECTION_BOTTOM:
-                    return new EdgeEffectProxy(getContext(), mEdgeGlowBottom);
+            if (direction == DIRECTION_TOP) {
+                return new EdgeEffectProxy(getContext(), mEdgeGlowTop);
             }
             return super.createEdgeEffect(view, direction);
         }

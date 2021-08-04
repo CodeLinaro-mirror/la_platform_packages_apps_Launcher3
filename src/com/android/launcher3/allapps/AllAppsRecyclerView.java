@@ -21,6 +21,7 @@ import static android.view.View.MeasureSpec.makeMeasureSpec;
 
 import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCHER_ALLAPPS_VERTICAL_SWIPE_BEGIN;
 import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCHER_ALLAPPS_VERTICAL_SWIPE_END;
+import static com.android.launcher3.util.UiThreadHelper.hideKeyboardAsync;
 
 import android.content.Context;
 import android.content.res.Resources;
@@ -31,7 +32,6 @@ import android.util.Log;
 import android.util.SparseIntArray;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.WindowInsets;
 
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -40,7 +40,9 @@ import com.android.launcher3.BaseRecyclerView;
 import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.LauncherAppState;
 import com.android.launcher3.R;
+import com.android.launcher3.config.FeatureFlags;
 import com.android.launcher3.logging.StatsLogManager;
+import com.android.launcher3.views.ActivityContext;
 import com.android.launcher3.views.RecyclerViewFastScroller;
 
 import java.util.ArrayList;
@@ -165,7 +167,7 @@ public class AllAppsRecyclerView extends BaseRecyclerView {
         // Always scroll the view to the top so the user can see the changed results
         scrollToTop();
 
-        if (mApps.hasNoFilteredResults()) {
+        if (mApps.hasNoFilteredResults() && !FeatureFlags.ENABLE_DEVICE_SEARCH.get()) {
             if (mEmptySearchBackground == null) {
                 mEmptySearchBackground = new AllAppsBackgroundDrawable(getContext());
                 mEmptySearchBackground.setAlpha(0);
@@ -187,10 +189,9 @@ public class AllAppsRecyclerView extends BaseRecyclerView {
         StatsLogManager mgr = BaseDraggingActivity.fromContext(getContext()).getStatsLogManager();
         switch (state) {
             case SCROLL_STATE_DRAGGING:
+                requestFocus();
                 mgr.logger().sendToInteractionJankMonitor(
                         LAUNCHER_ALLAPPS_VERTICAL_SWIPE_BEGIN, this);
-                requestFocus();
-                getWindowInsetsController().hide(WindowInsets.Type.ime());
                 break;
             case SCROLL_STATE_IDLE:
                 mgr.logger().sendToInteractionJankMonitor(
@@ -206,6 +207,8 @@ public class AllAppsRecyclerView extends BaseRecyclerView {
                 && mEmptySearchBackground != null && mEmptySearchBackground.getAlpha() > 0) {
             mEmptySearchBackground.setHotspot(e.getX(), e.getY());
         }
+        hideKeyboardAsync(ActivityContext.lookupContext(getContext()),
+                getApplicationWindowToken());
         return result;
     }
 
@@ -445,5 +448,15 @@ public class AllAppsRecyclerView extends BaseRecyclerView {
     @Override
     public boolean hasOverlappingRendering() {
         return false;
+    }
+
+    /**
+     * Returns distance between left and right app icons
+     */
+    public int getTabWidth() {
+        DeviceProfile grid = BaseDraggingActivity.fromContext(getContext()).getDeviceProfile();
+        int totalWidth = getMeasuredWidth() - getPaddingLeft() - getPaddingRight();
+        int iconPadding = totalWidth / grid.numShownAllAppsColumns - grid.allAppsIconSizePx;
+        return totalWidth - iconPadding - grid.allAppsIconDrawablePaddingPx;
     }
 }

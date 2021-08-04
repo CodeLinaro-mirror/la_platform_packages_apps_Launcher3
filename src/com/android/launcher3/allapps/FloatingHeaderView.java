@@ -72,8 +72,13 @@ public class FloatingHeaderView extends LinearLayout implements
                     }
 
                     int current = -mCurrentRV.getCurrentScrollY();
+                    boolean headerCollapsed = mHeaderCollapsed;
                     moved(current);
                     applyVerticalMove();
+                    if (headerCollapsed != mHeaderCollapsed) {
+                        AllAppsContainerView parent = (AllAppsContainerView) getParent();
+                        parent.invalidateHeader();
+                    }
                 }
             };
 
@@ -147,6 +152,14 @@ public class FloatingHeaderView extends LinearLayout implements
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         PluginManagerWrapper.INSTANCE.get(getContext()).removePluginListener(this);
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        if (mMainRV != null) {
+            mTabLayout.getLayoutParams().width = mMainRV.getTabWidth();
+        }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     }
 
     private void recreateAllRowsArray() {
@@ -428,6 +441,13 @@ public class FloatingHeaderView extends LinearLayout implements
             }
         }
         return null;
+    }
+
+    /**
+     * Returns visible height of FloatingHeaderView contents
+     */
+    public int getVisibleBottomBound() {
+        return getBottom() + mTranslationY;
     }
 }
 

@@ -99,12 +99,12 @@ public class Background extends LauncherInstrumentation.VisibleContainer {
                                 end,
                                 gestureScope),
                         event -> TestProtocol.PAUSE_DETECTED_MESSAGE.equals(event.getClassName()),
-                        () -> "Pause wasn't detected");
+                        () -> "Pause wasn't detected", "swiping and holding");
                 mLauncher.runToState(
                         () -> mLauncher.sendPointer(
                                 downTime, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, end,
                                 gestureScope),
-                        OVERVIEW_STATE_ORDINAL);
+                        OVERVIEW_STATE_ORDINAL, "sending UP event");
                 break;
             }
 
@@ -137,7 +137,7 @@ public class Background extends LauncherInstrumentation.VisibleContainer {
                 mLauncher.expectEvent(TestProtocol.SEQUENCE_MAIN, SQUARE_BUTTON_EVENT);
                 mLauncher.runToState(
                         () -> mLauncher.waitForSystemUiObject("recent_apps").click(),
-                        OVERVIEW_STATE_ORDINAL);
+                        OVERVIEW_STATE_ORDINAL, "clicking Recents button");
                 break;
         }
         expectSwitchToOverviewEvents();
@@ -163,8 +163,8 @@ public class Background extends LauncherInstrumentation.VisibleContainer {
     @NonNull
     private void quickSwitch(boolean toRight) {
         try (LauncherInstrumentation.Closable e = mLauncher.eventsCheck();
-            LauncherInstrumentation.Closable c = mLauncher.addContextLayer(
-                    "want to quick switch to the previous app")) {
+             LauncherInstrumentation.Closable c = mLauncher.addContextLayer(
+                     "want to quick switch to the previous app")) {
             verifyActiveContainer();
             final boolean launcherWasVisible = mLauncher.isLauncherVisible();
             boolean transposeInLandscape = false;
@@ -177,33 +177,34 @@ public class Background extends LauncherInstrumentation.VisibleContainer {
                     final int startY;
                     final int endX;
                     final int endY;
+                    final int cornerRadius = (int) Math.ceil(mLauncher.getWindowCornerRadius());
                     if (toRight) {
                         if (mLauncher.getDevice().isNaturalOrientation() || !transposeInLandscape) {
                             // Swipe from the bottom left to the bottom right of the screen.
-                            startX = 0;
+                            startX = cornerRadius;
                             startY = getSwipeStartY();
-                            endX = mLauncher.getDevice().getDisplayWidth();
+                            endX = mLauncher.getDevice().getDisplayWidth() - cornerRadius;
                             endY = startY;
                         } else {
                             // Swipe from the bottom right to the top right of the screen.
                             startX = getSwipeStartX();
-                            startY = mLauncher.getRealDisplaySize().y - 1;
+                            startY = mLauncher.getRealDisplaySize().y - 1 - cornerRadius;
                             endX = startX;
-                            endY = 0;
+                            endY = cornerRadius;
                         }
                     } else {
                         if (mLauncher.getDevice().isNaturalOrientation() || !transposeInLandscape) {
                             // Swipe from the bottom right to the bottom left of the screen.
-                            startX = mLauncher.getDevice().getDisplayWidth();
+                            startX = mLauncher.getDevice().getDisplayWidth() - cornerRadius;
                             startY = getSwipeStartY();
-                            endX = 0;
+                            endX = cornerRadius;
                             endY = startY;
                         } else {
                             // Swipe from the bottom left to the top left of the screen.
                             startX = getSwipeStartX();
-                            startY = 0;
+                            startY = cornerRadius;
                             endX = startX;
-                            endY = mLauncher.getRealDisplaySize().y - 1;
+                            endY = mLauncher.getRealDisplaySize().y - 1 - cornerRadius;
                         }
                     }
 
@@ -217,7 +218,7 @@ public class Background extends LauncherInstrumentation.VisibleContainer {
                             () -> mLauncher.linearGesture(
                                     startX, startY, endX, endY, 20, false, gestureScope),
                             event -> event.getEventType() == TYPE_WINDOW_STATE_CHANGED,
-                            () -> "Quick switch gesture didn't change window state");
+                            () -> "Quick switch gesture didn't change window state", "swiping");
                     break;
                 }
 
@@ -225,13 +226,15 @@ public class Background extends LauncherInstrumentation.VisibleContainer {
                     // Double press the recents button.
                     UiObject2 recentsButton = mLauncher.waitForSystemUiObject("recent_apps");
                     mLauncher.expectEvent(TestProtocol.SEQUENCE_MAIN, SQUARE_BUTTON_EVENT);
-                    mLauncher.runToState(() -> recentsButton.click(), OVERVIEW_STATE_ORDINAL);
+                    mLauncher.runToState(() -> recentsButton.click(), OVERVIEW_STATE_ORDINAL,
+                            "clicking Recents button for the first time");
                     mLauncher.getOverview();
                     mLauncher.expectEvent(TestProtocol.SEQUENCE_MAIN, SQUARE_BUTTON_EVENT);
                     mLauncher.executeAndWaitForEvent(
                             () -> recentsButton.click(),
                             event -> event.getEventType() == TYPE_WINDOW_STATE_CHANGED,
-                            () -> "Pressing recents button didn't change window state");
+                            () -> "Pressing recents button didn't change window state",
+                            "clicking Recents button for the second time");
                     break;
             }
             mLauncher.expectEvent(TestProtocol.SEQUENCE_MAIN, TASK_START_EVENT);

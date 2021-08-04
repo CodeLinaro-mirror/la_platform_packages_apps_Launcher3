@@ -19,7 +19,7 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="recent_task_option_pin" msgid="7929860679018978258">"Blocca"</string>
+    <string name="recent_task_option_pin" msgid="7929860679018978258">"Blocca su schermo"</string>
     <string name="recent_task_option_freeform" msgid="48863056265284071">"Forma libera"</string>
     <string name="recents_empty_message" msgid="7040467240571714191">"Nessun elemento recente"</string>
     <string name="accessibility_app_usage_settings" msgid="6312864233673544149">"Impostazioni di utilizzo delle app"</string>
@@ -57,7 +57,7 @@
     <string name="back_left_gesture_intro_title" msgid="5197184481779330065">"Scorri da sinistra per tornare indietro"</string>
     <string name="back_right_gesture_intro_title" msgid="7431951986971898074">"Scorri da destra per tornare indietro"</string>
     <string name="back_left_gesture_intro_subtitle" msgid="7672761376577628602">"Per tornare all\'ultima schermata mostrata, scorri dal bordo sinistro verso il centro dello schermo."</string>
-    <string name="back_right_gesture_intro_subtitle" msgid="2735828029197816509">"Puoi anche tornare all\'ultima schermata scorrendo da bordo destro verso centro dello schermo. Prova."</string>
+    <string name="back_right_gesture_intro_subtitle" msgid="2735828029197816509">"Puoi anche tornare all\'ultima schermata scorrendo dal bordo destro verso il centro dello schermo. Prova."</string>
     <string name="home_gesture_feedback_swipe_too_far_from_edge" msgid="1446774096007065298">"Assicurati di scorrere verso l\'alto dal bordo inferiore dello schermo."</string>
     <string name="home_gesture_feedback_overview_detected" msgid="1557523944897393013">"Assicurati di non fare pause prima di sollevare il dito."</string>
     <string name="home_gesture_feedback_wrong_swipe_direction" msgid="6993979358080825438">"Assicurati di scorrere verso l\'alto senza fermarti."</string>

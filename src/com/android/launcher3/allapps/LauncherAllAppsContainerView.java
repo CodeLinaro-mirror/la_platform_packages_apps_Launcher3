@@ -15,8 +15,6 @@
  */
 package com.android.launcher3.allapps;
 
-import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCHER_ALLAPPS_KEYBOARD_CLOSED;
-
 import android.content.Context;
 import android.graphics.Rect;
 import android.util.AttributeSet;
@@ -25,7 +23,6 @@ import android.view.MotionEvent;
 import com.android.launcher3.Launcher;
 import com.android.launcher3.LauncherState;
 import com.android.launcher3.statemanager.StateManager.StateListener;
-import com.android.launcher3.views.WorkEduView;
 
 /**
  * AllAppsContainerView with launcher specific callbacks
@@ -88,18 +85,5 @@ public class LauncherAllAppsContainerView extends AllAppsContainerView {
     @Override
     public void onActivePageChanged(int currentActivePage) {
         super.onActivePageChanged(currentActivePage);
-        if (mUsingTabs) {
-            if (currentActivePage == AdapterHolder.WORK) {
-                WorkEduView.showWorkEduIfNeeded(mLauncher);
-            } else {
-                mWorkTabListener = WorkEduView.showEduFlowIfNeeded(mLauncher, mWorkTabListener);
-            }
-        }
-    }
-
-    @Override
-    protected void hideIme() {
-        super.hideIme();
-        mLauncher.getStatsLogManager().logger().log(LAUNCHER_ALLAPPS_KEYBOARD_CLOSED);
     }
 }

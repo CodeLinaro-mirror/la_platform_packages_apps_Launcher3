@@ -57,12 +57,12 @@ public final class FeatureFlags {
     public static final boolean IS_STUDIO_BUILD = BuildConfig.IS_STUDIO_BUILD;
 
     /**
-     * Enable moving the QSB on the 0th screen of the workspace. This is not a configuration feature
+     * Disable moving the QSB on the 0th screen of the workspace. This is not a configuration feature
      * and should be modified at a project level.
      * @deprecated Use {@link BuildConfig#QSB_ON_FIRST_SCREEN} directly
      */
     @Deprecated
-    public static final boolean QSB_ON_FIRST_SCREEN = BuildConfig.QSB_ON_FIRST_SCREEN;
+    public static final boolean QSB_ON_FIRST_SCREEN = false;
 
     /**
      * Feature flag to handle define config changes dynamically instead of killing the process.

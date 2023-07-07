@@ -17,6 +17,7 @@
 package com.android.quickstep;
 
 import static com.android.launcher3.ui.TaplTestsLauncher3.getAppPackageName;
+import static com.android.quickstep.TaskbarModeSwitchRule.Mode.PERSISTENT;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -44,6 +45,7 @@ import com.android.launcher3.ui.TaplTestsLauncher3;
 import com.android.launcher3.util.Wait;
 import com.android.launcher3.util.rule.ScreenRecordRule.ScreenRecord;
 import com.android.quickstep.NavigationModeSwitchRule.NavigationModeSwitch;
+import com.android.quickstep.TaskbarModeSwitchRule.TaskbarModeSwitch;
 import com.android.quickstep.views.RecentsView;
 
 import org.junit.After;
@@ -184,35 +186,6 @@ public class TaplTestsQuickstep extends AbstractQuickStepTest {
         OverviewActions actionsView =
                 mLauncher.goHome().switchToOverview().getOverviewActions();
         actionsView.clickAndDismissScreenshot();
-    }
-
-    @Test
-    @PortraitLandscape
-    public void testSplitFromOverview() {
-        assumeTrue(!mLauncher.isTablet());
-
-        startTestActivity(2);
-        startTestActivity(3);
-
-        mLauncher.goHome().switchToOverview().getCurrentTask()
-                .tapMenu()
-                .tapSplitMenuItem()
-                .getCurrentTask()
-                .open();
-    }
-
-    @Test
-    @PortraitLandscape
-    public void testSplitFromOverviewForTablet() {
-        assumeTrue(mLauncher.isTablet());
-
-        startTestActivity(2);
-        startTestActivity(3);
-
-        mLauncher.goHome().switchToOverview().getOverviewActions()
-                .clickSplit()
-                .getTestActivityTask(2)
-                .open();
     }
 
     private int getCurrentOverviewPage(Launcher launcher) {
@@ -388,9 +361,9 @@ public class TaplTestsQuickstep extends AbstractQuickStepTest {
         waitForState("Launcher internal state didn't switch to Home", () -> LauncherState.NORMAL);
     }
 
-    @Ignore
     @Test
     @PortraitLandscape
+    @TaskbarModeSwitch(mode = PERSISTENT)
     public void testOverviewForTablet() throws Exception {
         assumeTrue(mLauncher.isTablet());
 
@@ -452,6 +425,55 @@ public class TaplTestsQuickstep extends AbstractQuickStepTest {
         executeOnLauncher(
                 launcher -> assertEquals("Still have tasks after dismissing all",
                         0, getTaskCount(launcher)));
+    }
+
+    @Test
+    @PortraitLandscape
+    public void testOverviewDeadzones() throws Exception {
+        startTestAppsWithCheck();
+
+        Overview overview = mLauncher.goHome().switchToOverview();
+        assertTrue("Launcher internal state should be Overview",
+                isInState(() -> LauncherState.OVERVIEW));
+        executeOnLauncher(
+                launcher -> assertTrue("Should have at least 3 tasks",
+                        getTaskCount(launcher) >= 3));
+
+        // It should not dismiss overview when tapping between tasks
+        overview.touchBetweenTasks();
+        overview = mLauncher.getOverview();
+        assertTrue("Launcher internal state should be Overview",
+                isInState(() -> LauncherState.OVERVIEW));
+
+        // Dismiss when tapping to the right of the focused task
+        overview.touchOutsideFirstTask();
+        assertTrue("Launcher internal state should be Home",
+                isInState(() -> LauncherState.NORMAL));
+    }
+
+    @Test
+    @PortraitLandscape
+    public void testTaskbarDeadzonesForTablet() throws Exception {
+        assumeTrue(mLauncher.isTablet());
+
+        startTestAppsWithCheck();
+
+        Overview overview = mLauncher.goHome().switchToOverview();
+        assertTrue("Launcher internal state should be Overview",
+                isInState(() -> LauncherState.OVERVIEW));
+        executeOnLauncher(
+                launcher -> assertTrue("Should have at least 3 tasks",
+                        getTaskCount(launcher) >= 3));
+
+        // On persistent taskbar, it should not dismiss when tapping the taskbar
+        overview.touchTaskbarBottomCorner(/* tapRight= */ false);
+        assertTrue("Launcher internal state should be Overview",
+                isInState(() -> LauncherState.OVERVIEW));
+
+        // On persistent taskbar, it should not dismiss when tapping the taskbar
+        overview.touchTaskbarBottomCorner(/* tapRight= */ true);
+        assertTrue("Launcher internal state should be Overview",
+                isInState(() -> LauncherState.OVERVIEW));
     }
 
     @Test

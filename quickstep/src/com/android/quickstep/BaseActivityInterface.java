@@ -16,6 +16,7 @@
 package com.android.quickstep;
 
 import static com.android.launcher3.LauncherAnimUtils.VIEW_BACKGROUND_COLOR;
+import static com.android.launcher3.MotionEventsUtils.isTrackpadMultiFingerSwipe;
 import static com.android.launcher3.anim.Interpolators.ACCEL_2;
 import static com.android.launcher3.anim.Interpolators.INSTANT;
 import static com.android.launcher3.anim.Interpolators.LINEAR;
@@ -186,8 +187,12 @@ public abstract class BaseActivityInterface<STATE_TYPE extends BaseState<STATE_T
 
     public abstract boolean allowMinimizeSplitScreen();
 
+    /** @return whether to allow going to All Apps from Overview. */
+    public abstract boolean allowAllAppsFromOverview();
+
     public boolean deferStartingActivity(RecentsAnimationDeviceState deviceState, MotionEvent ev) {
-        return deviceState.isInDeferredGestureRegion(ev) || deviceState.isImeRenderingNavButtons();
+        return deviceState.isInDeferredGestureRegion(ev) || deviceState.isImeRenderingNavButtons()
+                || isTrackpadMultiFingerSwipe(ev);
     }
 
     /**
@@ -306,7 +311,7 @@ public abstract class BaseActivityInterface<STATE_TYPE extends BaseState<STATE_T
         out.x = dp.widthPx;
         out.y = dp.heightPx;
         if (dp.isTablet && !DisplayController.isTransientTaskbar(context)) {
-            out.y -= dp.taskbarSize;
+            out.y -= dp.taskbarHeight;
         }
     }
 
@@ -365,7 +370,7 @@ public abstract class BaseActivityInterface<STATE_TYPE extends BaseState<STATE_T
         calculateTaskSize(context, dp, outRect, orientedState);
         boolean isGridOnlyOverview = dp.isTablet && FeatureFlags.ENABLE_GRID_ONLY_OVERVIEW.get();
         int claimedSpaceBelow = isGridOnlyOverview
-                ? dp.overviewActionsTopMarginPx + dp.overviewActionsHeight + dp.stashedTaskbarSize
+                ? dp.overviewActionsTopMarginPx + dp.overviewActionsHeight + dp.stashedTaskbarHeight
                 : (dp.heightPx - outRect.bottom - dp.getInsets().bottom);
         int minimumHorizontalPadding = 0;
         if (!isGridOnlyOverview) {

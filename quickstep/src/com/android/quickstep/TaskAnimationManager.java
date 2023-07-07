@@ -117,7 +117,7 @@ public class TaskAnimationManager implements RecentsAnimationCallbacks.RecentsAn
             }
         }
         // But force-finish it anyways
-        finishRunningRecentsAnimation(false /* toHome */);
+        finishRunningRecentsAnimation(false /* toHome */, true /* forceFinish */);
 
         if (mCallbacks != null) {
             // If mCallbacks still != null, that means we are getting this startRecentsAnimation()
@@ -188,12 +188,8 @@ public class TaskAnimationManager implements RecentsAnimationCallbacks.RecentsAn
                         return;
                     }
                 } else if (nonAppTargets.length > 0) {
-                    TaskViewUtils.createSplitAuxiliarySurfacesAnimator(
-                            nonAppTargets /* nonApps */,
-                            true /*shown*/, dividerAnimator -> {
-                                dividerAnimator.start();
-                                dividerAnimator.end();
-                            });
+                    TaskViewUtils.createSplitAuxiliarySurfacesAnimator(nonAppTargets /* nonApps */,
+                            true /*shown*/, null /* animatorHandler */);
                 }
                 if (mController != null) {
                     if (mLastAppearedTaskTarget == null
@@ -243,6 +239,9 @@ public class TaskAnimationManager implements RecentsAnimationCallbacks.RecentsAn
                     // No transient launch when desktop task is on top
                     homeIsOnTop = true;
                 }
+            }
+            if (activityInterface.allowAllAppsFromOverview()) {
+                homeIsOnTop = true;
             }
             if (!homeIsOnTop) {
                 options.setTransientLaunch();
@@ -299,13 +298,26 @@ public class TaskAnimationManager implements RecentsAnimationCallbacks.RecentsAn
      * Finishes the running recents animation.
      */
     public void finishRunningRecentsAnimation(boolean toHome) {
+        finishRunningRecentsAnimation(toHome, false /* forceFinish */);
+    }
+
+    /**
+     * Finishes the running recents animation.
+     * @param forceFinish will synchronously finish the controller
+     */
+    private void finishRunningRecentsAnimation(boolean toHome, boolean forceFinish) {
         if (mController != null) {
             ActiveGestureLog.INSTANCE.addLog(
                     /* event= */ "finishRunningRecentsAnimation", toHome);
             mCallbacks.notifyAnimationCanceled();
-            Utilities.postAsyncCallback(MAIN_EXECUTOR.getHandler(), toHome
-                    ? mController::finishAnimationToHome
-                    : mController::finishAnimationToApp);
+            if (forceFinish) {
+                mController.finishController(toHome, null, false /* sendUserLeaveHint */,
+                        true /* forceFinish */);
+            } else {
+                Utilities.postAsyncCallback(MAIN_EXECUTOR.getHandler(), toHome
+                        ? mController::finishAnimationToHome
+                        : mController::finishAnimationToApp);
+            }
             cleanUpRecentsAnimation();
         }
     }

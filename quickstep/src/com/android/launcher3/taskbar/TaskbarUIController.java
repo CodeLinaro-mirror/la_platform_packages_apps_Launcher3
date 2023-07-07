@@ -30,8 +30,10 @@ import androidx.annotation.CallSuper;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.android.launcher3.Utilities;
 import com.android.launcher3.model.data.ItemInfo;
 import com.android.launcher3.model.data.ItemInfoWithIcon;
+import com.android.launcher3.popup.SystemShortcut;
 import com.android.launcher3.util.ComponentKey;
 import com.android.launcher3.util.DisplayController;
 import com.android.launcher3.util.SplitConfigurationOptions;
@@ -41,6 +43,7 @@ import com.android.quickstep.views.TaskView;
 import com.android.quickstep.views.TaskView.TaskIdAttributeContainer;
 
 import java.io.PrintWriter;
+import java.util.stream.Stream;
 
 /**
  * Base class for providing different taskbar UI
@@ -122,6 +125,12 @@ public class TaskbarUIController {
             stashController.updateStateForFlag(FLAG_IN_APP, true);
             stashController.applyState();
         }
+    }
+
+    /**
+     * SysUI flags updated, see QuickStepContract.SYSUI_STATE_* values.
+     */
+    public void updateStateForSysuiFlags(int sysuiFlags) {
     }
 
     /**
@@ -238,7 +247,8 @@ public class TaskbarUIController {
                                     taskAttributes.getIconView().getDrawable(),
                                     taskAttributes.getThumbnailView(),
                                     taskAttributes.getThumbnailView().getThumbnail(),
-                                    null /* intent */);
+                                    null /* intent */,
+                                    null /* user */);
                             return;
                         }
                     }
@@ -250,7 +260,8 @@ public class TaskbarUIController {
                             new BitmapDrawable(info.bitmap.icon),
                             startingView,
                             null /* thumbnail */,
-                            intent);
+                            intent,
+                            info.user);
                 }
         );
     }
@@ -309,5 +320,20 @@ public class TaskbarUIController {
             }
         }
         return null;
+    }
+
+    /**
+     * Refreshes the resumed state of this ui controller.
+     */
+    public void refreshResumedState() {}
+
+    /**
+     * Returns a stream of split screen menu options appropriate to the device.
+     */
+    Stream<SystemShortcut.Factory<BaseTaskbarContext>> getSplitMenuOptions() {
+        return Utilities
+                .getSplitPositionOptions(mControllers.taskbarActivityContext.getDeviceProfile())
+                .stream()
+                .map(mControllers.taskbarPopupController::createSplitShortcutFactory);
     }
 }

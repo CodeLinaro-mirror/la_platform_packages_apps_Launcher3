@@ -19,10 +19,10 @@ import static android.app.WindowConfiguration.ACTIVITY_TYPE_HOME;
 
 import static com.android.launcher3.util.Executors.MAIN_EXECUTOR;
 import static com.android.launcher3.util.Executors.UI_HELPER_EXECUTOR;
+import static com.android.quickstep.GestureState.GestureEndTarget.RECENTS;
 import static com.android.quickstep.GestureState.STATE_RECENTS_ANIMATION_INITIALIZED;
 import static com.android.quickstep.GestureState.STATE_RECENTS_ANIMATION_STARTED;
 import static com.android.quickstep.util.ActiveGestureErrorDetector.GestureEvent.START_RECENTS_ANIMATION;
-import static com.android.systemui.shared.system.RemoteTransitionCompat.newRemoteTransition;
 
 import android.app.ActivityManager;
 import android.app.ActivityOptions;
@@ -31,7 +31,6 @@ import android.content.Intent;
 import android.os.SystemProperties;
 import android.util.Log;
 import android.view.RemoteAnimationTarget;
-import android.window.RemoteTransition;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
@@ -176,16 +175,21 @@ public class TaskAnimationManager implements RecentsAnimationCallbacks.RecentsAn
                 if (nonAppTargets == null) {
                     nonAppTargets = new RemoteAnimationTarget[0];
                 }
-                if (activityInterface.isInLiveTileMode()
+                if ((activityInterface.isInLiveTileMode()
+                            || mLastGestureState.getEndTarget() == RECENTS)
                         && activityInterface.getCreatedActivity() != null) {
                     RecentsView recentsView =
                             activityInterface.getCreatedActivity().getOverviewPanel();
                     if (recentsView != null) {
+                        ActiveGestureLog.INSTANCE.addLog("Launching side task id="
+                                + appearedTaskTarget.taskId);
                         recentsView.launchSideTaskInLiveTileMode(appearedTaskTarget.taskId,
                                 appearedTaskTargets,
                                 new RemoteAnimationTarget[0] /* wallpaper */,
                                 nonAppTargets /* nonApps */);
                         return;
+                    } else {
+                        ActiveGestureLog.INSTANCE.addLog("Unable to launch side task (no recents)");
                     }
                 } else if (nonAppTargets.length > 0) {
                     TaskViewUtils.createSplitAuxiliarySurfacesAnimator(nonAppTargets /* nonApps */,
@@ -226,9 +230,7 @@ public class TaskAnimationManager implements RecentsAnimationCallbacks.RecentsAn
         mCallbacks.addListener(listener);
 
         if (ENABLE_SHELL_TRANSITIONS) {
-            RemoteTransition transition = newRemoteTransition(mCallbacks,
-                    mCtx.getIApplicationThread());
-            final ActivityOptions options = ActivityOptions.makeRemoteTransition(transition);
+            final ActivityOptions options = ActivityOptions.makeBasic();
             // Allowing to pause Home if Home is top activity and Recents is not Home. So when user
             // start home when recents animation is playing, the home activity can be resumed again
             // to let the transition controller collect Home activity.
@@ -247,7 +249,7 @@ public class TaskAnimationManager implements RecentsAnimationCallbacks.RecentsAn
                 options.setTransientLaunch();
             }
             options.setSourceInfo(ActivityOptions.SourceInfo.TYPE_RECENTS_ANIMATION, eventTime);
-            UI_HELPER_EXECUTOR.execute(() -> mCtx.startActivity(intent, options.toBundle()));
+            SystemUiProxy.INSTANCE.getNoCreate().startRecentsActivity(intent, options, mCallbacks);
         } else {
             UI_HELPER_EXECUTOR.execute(() -> ActivityManagerWrapper.getInstance()
                     .startRecentsActivity(intent, eventTime, mCallbacks, null, null));

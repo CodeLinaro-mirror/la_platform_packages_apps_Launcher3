@@ -28,6 +28,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.UserHandle;
 import android.text.TextUtils;
+import android.os.Bundle;
 
 import com.android.launcher3.AppInfo;
 import com.android.launcher3.R;

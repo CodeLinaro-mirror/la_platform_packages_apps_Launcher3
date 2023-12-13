@@ -547,7 +547,7 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         setupLayoutTransition();
 
         // Set the wallpaper dimensions when Launcher starts up
-        setWallpaperDimension();
+        //setWallpaperDimension();
     }
 
     private void setupLayoutTransition() {

@@ -52,6 +52,7 @@ import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Message;
 import android.os.Parcelable;
+import android.os.SystemProperties;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.SparseArray;
@@ -288,6 +289,8 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     private final WorkspaceStateTransitionAnimation mStateTransitionAnimation;
 
     private final StatsLogManager mStatsLogManager;
+
+    static final boolean enableMemOptimize = SystemProperties.get("ro.product.memopt.enable").equals("1");
 
     /**
      * Used to inflate the Workspace from XML.
@@ -550,7 +553,9 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         setupLayoutTransition();
 
         // Set the wallpaper dimensions when Launcher starts up
-        setWallpaperDimension();
+        if (!enableMemOptimize){
+	    setWallpaperDimension();
+        }
     }
 
     private void setupLayoutTransition() {

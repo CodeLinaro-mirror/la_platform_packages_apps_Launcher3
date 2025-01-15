@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
- Copyright (C) 2019 The Android Open Source Project
+     Copyright (C) 2025 The Android Open Source Project
 
      Licensed under the Apache License, Version 2.0 (the "License");
      you may not use this file except in compliance with the License.
@@ -14,20 +14,9 @@
      See the License for the specific language governing permissions and
      limitations under the License.
 -->
-<shapes xmlns:launcher="http://schemas.android.com/apk/res-auto" >
 
-    <Circle launcher:folderIconRadius="1" />
-
-    <!-- Default icon for AOSP -->
-    <RoundedSquare launcher:folderIconRadius="0.16" />
-
-    <!-- Rounded icon from RRO -->
-    <RoundedSquare launcher:folderIconRadius="0.6" />
-
-    <!-- Square icon -->
-    <RoundedSquare launcher:folderIconRadius="0" />
-
-    <TearDrop launcher:folderIconRadius="0.3" />
-    <Squircle launcher:folderIconRadius="0.2" />
-
-</shapes>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="@color/materialColorSurfaceBright" />
+    <corners android:topLeftRadius="@dimen/task_thumbnail_header_round_corner_radius"
+        android:topRightRadius="@dimen/task_thumbnail_header_round_corner_radius"/>
+</shape>

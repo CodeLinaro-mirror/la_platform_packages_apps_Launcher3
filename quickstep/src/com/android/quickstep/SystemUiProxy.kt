@@ -45,6 +45,7 @@ import android.window.IOnBackInvokedCallback
 import android.window.RemoteTransition
 import android.window.TaskSnapshot
 import android.window.TransitionFilter
+import android.window.TransitionInfo
 import androidx.annotation.MainThread
 import androidx.annotation.VisibleForTesting
 import androidx.annotation.WorkerThread
@@ -62,6 +63,7 @@ import com.android.launcher3.util.SplitConfigurationOptions.StagePosition
 import com.android.quickstep.util.ActiveGestureProtoLogProxy
 import com.android.quickstep.util.ContextualSearchInvoker
 import com.android.quickstep.util.unfold.ProxyUnfoldTransitionProvider
+import com.android.systemui.contextualeducation.GestureType
 import com.android.systemui.shared.recents.ISystemUiProxy
 import com.android.systemui.shared.recents.model.ThumbnailData.Companion.wrap
 import com.android.systemui.shared.system.QuickStepContract
@@ -215,9 +217,9 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
             systemUiProxy?.onImeSwitcherLongPress()
         }
 
-    fun updateContextualEduStats(isTrackpadGesture: Boolean, gestureType: String) =
+    fun updateContextualEduStats(isTrackpadGesture: Boolean, gestureType: GestureType) =
         executeWithErrorLog({ "Failed call updateContextualEduStats" }) {
-            systemUiProxy?.updateContextualEduStats(isTrackpadGesture, gestureType)
+            systemUiProxy?.updateContextualEduStats(isTrackpadGesture, gestureType.name)
         }
 
     fun setHomeRotationEnabled(enabled: Boolean) =
@@ -1174,6 +1176,7 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
             homeContentInsets: Rect?,
             minimizedHomeBounds: Rect?,
             extras: Bundle?,
+            transitionInfo: TransitionInfo?,
         ) =
             listener.onAnimationStart(
                 RecentsAnimationControllerCompat(controller),
@@ -1186,6 +1189,7 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
                     // https://developer.android.com/guide/components/aidl#Bundles
                     classLoader = SplitBounds::class.java.classLoader
                 },
+                transitionInfo,
             )
 
         override fun onAnimationCanceled(taskIds: IntArray?, taskSnapshots: Array<TaskSnapshot>?) =

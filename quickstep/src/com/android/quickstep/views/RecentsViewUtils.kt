@@ -17,6 +17,7 @@
 package com.android.quickstep.views
 
 import android.graphics.Rect
+import android.os.VibrationAttributes
 import android.view.View
 import androidx.core.view.children
 import androidx.dynamicanimation.animation.FloatPropertyCompat
@@ -26,14 +27,18 @@ import androidx.dynamicanimation.animation.SpringForce
 import com.android.launcher3.Flags.enableLargeDesktopWindowingTile
 import com.android.launcher3.Flags.enableSeparateExternalDisplayTasks
 import com.android.launcher3.R
+import com.android.launcher3.Utilities.boundToRange
 import com.android.launcher3.touch.SingleAxisSwipeDetector
 import com.android.launcher3.util.DynamicResource
 import com.android.launcher3.util.IntArray
+import com.android.launcher3.util.MSDLPlayerWrapper
 import com.android.quickstep.util.GroupTask
 import com.android.quickstep.util.TaskGridNavHelper
 import com.android.quickstep.util.isExternalDisplay
 import com.android.quickstep.views.RecentsView.RUNNING_TASK_ATTACH_ALPHA
 import com.android.systemui.shared.recents.model.ThumbnailData
+import com.google.android.msdl.data.model.MSDLToken
+import com.google.android.msdl.domain.InteractionProperties
 import java.util.function.BiConsumer
 import kotlin.math.abs
 
@@ -378,7 +383,7 @@ class RecentsViewUtils(private val recentsView: RecentsView<*, *>) {
             // negative displacement to positive displacement). We do not check for an exact value
             // to compare to, as the update listener does not necessarily hit every value (e.g. a
             // value of zero). Do not check again once it has started settling, as a spring can
-            // bounce past the origin multiple times depending on the stifness and damping ratio.
+            // bounce past the origin multiple times depending on the stiffness and damping ratio.
             if (startSettling) return@addUpdateListener
             if (lastPosition < 0 && value >= 0) {
                 startSettling = true
@@ -386,75 +391,79 @@ class RecentsViewUtils(private val recentsView: RecentsView<*, *>) {
             lastPosition = value
             if (startSettling) {
                 neighborsToSettle.setStartVelocity(velocity).animateToFinalPosition(0f)
+                playDismissSettlingHaptic(velocity)
             }
         }
 
         // Add tasks before dragged index, fanning out from the dragged task.
         // The order they are added matters, as each spring drives the next.
         var previousNeighbor = neighborsToSettle
-        getTasksAdjacentToDraggedTask(draggedTaskView, towardsStart = true).forEach {
-            previousNeighbor = createNeighboringTaskViewSpringAnimation(it, previousNeighbor)
+        getTasksOffsetPairAdjacentToDraggedTask(draggedTaskView, towardsStart = true).forEach {
+            (taskView, offset) ->
+            previousNeighbor =
+                createNeighboringTaskViewSpringAnimation(
+                    taskView,
+                    offset * ADDITIONAL_DISMISS_DAMPING_RATIO,
+                    previousNeighbor,
+                )
         }
         // Add tasks after dragged index, fanning out from the dragged task.
         // The order they are added matters, as each spring drives the next.
         previousNeighbor = neighborsToSettle
-        getTasksAdjacentToDraggedTask(draggedTaskView, towardsStart = false).forEach {
-            previousNeighbor = createNeighboringTaskViewSpringAnimation(it, previousNeighbor)
+        getTasksOffsetPairAdjacentToDraggedTask(draggedTaskView, towardsStart = false).forEach {
+            (taskView, offset) ->
+            previousNeighbor =
+                createNeighboringTaskViewSpringAnimation(
+                    taskView,
+                    offset * ADDITIONAL_DISMISS_DAMPING_RATIO,
+                    previousNeighbor,
+                )
         }
     }
 
-    /** Gets adjacent tasks either before or after the dragged task in visual order. */
-    private fun getTasksAdjacentToDraggedTask(
+    /**
+     * Gets pairs of (TaskView, offset) adjacent the dragged task in visual order.
+     *
+     * <p>Gets tasks either before or after the dragged task along with their offset from it. The
+     * offset is the distance between indices for carousels, or distance between columns for grids.
+     */
+    private fun getTasksOffsetPairAdjacentToDraggedTask(
         draggedTaskView: TaskView,
         towardsStart: Boolean,
-    ): Sequence<TaskView> {
+    ): Sequence<Pair<TaskView, Int>> {
         if (recentsView.showAsGrid()) {
-            return gridTaskViewInTabOrderSequence(draggedTaskView, towardsStart)
+            val taskGridNavHelper =
+                TaskGridNavHelper(
+                    recentsView.topRowIdArray,
+                    recentsView.bottomRowIdArray,
+                    getLargeTaskViewIds(),
+                    hasAddDesktopButton = false,
+                )
+            return taskGridNavHelper
+                .gridTaskViewIdOffsetPairInTabOrderSequence(
+                    draggedTaskView.taskViewId,
+                    towardsStart,
+                )
+                .mapNotNull { (taskViewId, columnOffset) ->
+                    recentsView.getTaskViewFromTaskViewId(taskViewId)?.let { taskView ->
+                        Pair(taskView, columnOffset)
+                    }
+                }
         } else {
             val taskViewList = taskViews.toList()
             val draggedTaskViewIndex = taskViewList.indexOf(draggedTaskView)
 
             return if (towardsStart) {
-                taskViewList.take(draggedTaskViewIndex).reversed().asSequence()
+                taskViewList
+                    .take(draggedTaskViewIndex)
+                    .reversed()
+                    .mapIndexed { index, taskView -> Pair(taskView, index + 1) }
+                    .asSequence()
             } else {
-                taskViewList.takeLast(taskViewList.size - draggedTaskViewIndex - 1).asSequence()
-            }
-        }
-    }
-
-    /**
-     * Returns a sequence of TaskViews in the grid, ordered according to tab navigation, starting
-     * from the dragged TaskView, in the direction of the provided delta.
-     *
-     * <p>A positive delta moves forward in the tab order towards the end of the grid, while a
-     * negative value moves backward towards the beginning.
-     */
-    private fun gridTaskViewInTabOrderSequence(
-        draggedTaskView: TaskView,
-        towardsStart: Boolean,
-    ): Sequence<TaskView> = sequence {
-        val taskGridNavHelper =
-            TaskGridNavHelper(
-                recentsView.topRowIdArray,
-                recentsView.bottomRowIdArray,
-                getLargeTaskViewIds(),
-                /* hasAddDesktopButton= */ false,
-            )
-        var nextTaskView: TaskView? = draggedTaskView
-        var previousTaskView: TaskView? = null
-        while (nextTaskView != previousTaskView && nextTaskView != null) {
-            previousTaskView = nextTaskView
-            nextTaskView =
-                recentsView.getTaskViewFromTaskViewId(
-                    taskGridNavHelper.getNextGridPage(
-                        nextTaskView.taskViewId,
-                        if (towardsStart) -1 else 1,
-                        TaskGridNavHelper.DIRECTION_TAB,
-                        /* cycle = */ false,
-                    )
-                )
-            if (nextTaskView != null && nextTaskView != previousTaskView) {
-                yield(nextTaskView)
+                taskViewList
+                    .takeLast(taskViewList.size - draggedTaskViewIndex - 1)
+                    .mapIndexed { index, taskView -> Pair(taskView, index + 1) }
+                    .asSequence()
             }
         }
     }
@@ -462,6 +471,7 @@ class RecentsViewUtils(private val recentsView: RecentsView<*, *>) {
     /** Creates a neighboring task view spring, driven by the spring of its neighbor. */
     private fun createNeighboringTaskViewSpringAnimation(
         taskView: TaskView,
+        dampingOffsetRatio: Float,
         previousNeighborSpringAnimation: SpringAnimation,
     ): SpringAnimation {
         val neighboringTaskViewSpringAnimation =
@@ -471,7 +481,7 @@ class RecentsViewUtils(private val recentsView: RecentsView<*, *>) {
                         taskView.secondaryDismissTranslationProperty
                     ),
                 )
-                .setSpring(createExpressiveDismissSpringForce())
+                .setSpring(createExpressiveDismissSpringForce(dampingOffsetRatio))
         // Update live tile on spring animation.
         if (taskView.isRunningTask && recentsView.enableDrawingLiveTile) {
             neighboringTaskViewSpringAnimation.addUpdateListener { _, _, _ ->
@@ -489,18 +499,43 @@ class RecentsViewUtils(private val recentsView: RecentsView<*, *>) {
         return neighboringTaskViewSpringAnimation
     }
 
-    private fun createExpressiveDismissSpringForce(): SpringForce {
+    private fun createExpressiveDismissSpringForce(dampingRatioOffset: Float = 0f): SpringForce {
         val resourceProvider = DynamicResource.provider(recentsView.mContainer)
         return SpringForce()
             .setDampingRatio(
-                resourceProvider.getFloat(R.dimen.expressive_dismiss_task_trans_y_damping_ratio)
+                resourceProvider.getFloat(R.dimen.expressive_dismiss_task_trans_y_damping_ratio) +
+                    dampingRatioOffset
             )
             .setStiffness(
                 resourceProvider.getFloat(R.dimen.expressive_dismiss_task_trans_y_stiffness)
             )
     }
 
+    /**
+     * Plays a haptic as the dragged task view settles back into its rest state.
+     *
+     * <p>Haptic intensity is proportional to velocity.
+     */
+    private fun playDismissSettlingHaptic(velocity: Float) {
+        val maxDismissSettlingVelocity =
+            recentsView.pagedOrientationHandler.getSecondaryDimension(recentsView)
+        MSDLPlayerWrapper.INSTANCE.get(recentsView.context)
+            .playToken(
+                MSDLToken.CANCEL,
+                InteractionProperties.DynamicVibrationScale(
+                    boundToRange(velocity / maxDismissSettlingVelocity, 0f, 1f),
+                    VibrationAttributes.Builder()
+                        .setUsage(VibrationAttributes.USAGE_TOUCH)
+                        .setFlags(VibrationAttributes.FLAG_PIPELINED_EFFECT)
+                        .build(),
+                ),
+            )
+    }
+
     companion object {
         val TEMP_RECT = Rect()
+
+        // The additional damping to apply to tasks further from the dismissed task.
+        const val ADDITIONAL_DISMISS_DAMPING_RATIO = 0.15f
     }
 }

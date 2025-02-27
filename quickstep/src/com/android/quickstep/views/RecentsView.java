@@ -1462,7 +1462,8 @@ public abstract class RecentsView<
             anim.addListener(new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationEnd(Animator animation) {
-                    finishRecentsAnimation(false /* toRecents */, null);
+                    finishRecentsAnimation(false /* toRecents */, true /*shouldPip*/,
+                            allAppsAreTranslucent(apps), null);
                 }
             });
         } else {
@@ -1471,6 +1472,18 @@ public abstract class RecentsView<
                     getDepthController(), transitionInfo);
         }
         anim.start();
+    }
+
+    private boolean allAppsAreTranslucent(RemoteAnimationTarget[] apps) {
+        if (apps == null) {
+            return false;
+        }
+        for (int i = apps.length - 1; i >= 0; --i) {
+            if (!apps[i].isTranslucent) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public boolean isTaskViewVisible(TaskView tv) {
@@ -3908,6 +3921,22 @@ public abstract class RecentsView<
                 // the only invariant point in landscape split screen.
                 snapToLastTask = true;
             }
+            if (mUtils.getGridTaskCount() == 1 && dismissedTaskView.isGridTask()) {
+                TaskView lastLargeTile = mUtils.getLastLargeTaskView();
+                if (lastLargeTile != null) {
+                    // Calculate the distance to put last large tile back to middle of the screen.
+                    int primaryScroll = getPagedOrientationHandler().getPrimaryScroll(this);
+                    int lastLargeTileScroll = getScrollForPage(indexOfChild(lastLargeTile));
+                    longGridRowWidthDiff = primaryScroll - lastLargeTileScroll;
+
+                    if (!isClearAllHidden) {
+                        // If ClearAllButton is visible, reduce the distance by scroll difference
+                        // between ClearAllButton and the last task.
+                        longGridRowWidthDiff += getLastTaskScroll(/*clearAllScroll=*/0,
+                                getPagedOrientationHandler().getPrimarySize(mClearAllButton));
+                    }
+                }
+            }
 
             // If we need to animate the grid to compensate the clear all gap, we split the second
             // half of the dismiss pending animation (in which the non-dismissed tasks slide into
@@ -4746,9 +4775,8 @@ public abstract class RecentsView<
         }
         mClearAllButton.setContentAlpha(mContentAlpha);
 
-        // TODO(b/389209338): Handle the visibility of the `mAddDesktopButton`.
         if (mAddDesktopButton != null) {
-            mAddDesktopButton.setAlpha(mContentAlpha);
+            mAddDesktopButton.setContentAlpha(mContentAlpha);
         }
         int alphaInt = Math.round(alpha * 255);
         mEmptyMessagePaint.setAlpha(alphaInt);
@@ -6311,6 +6339,11 @@ public abstract class RecentsView<
 
     public ClearAllButton getClearAllButton() {
         return mClearAllButton;
+    }
+
+    @Nullable
+    public AddDesktopButton getAddDeskButton() {
+        return mAddDesktopButton;
     }
 
     /**

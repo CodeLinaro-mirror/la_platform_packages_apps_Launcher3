@@ -16,6 +16,7 @@
 
 package com.android.launcher3.util
 
+import android.content.Context
 import android.hardware.display.DisplayManager
 import android.view.Display
 import android.view.Display.DEFAULT_DISPLAY
@@ -61,5 +62,17 @@ class SandboxApplicationTest {
             assertThat(applicationContext).isEqualTo(this)
             onDestroy()
         }
+    }
+
+    @Test
+    fun testGetObject_objectCreatesDisplayContext_isSandboxed() {
+        class TestSingleton(context: Context) : SafeCloseable {
+            override fun close() = Unit
+
+            val displayContext = context.createDisplayContext(display)
+        }
+
+        val displayContext = MainThreadInitializedObject { TestSingleton(it) }[app].displayContext
+        assertThat(displayContext.applicationContext).isEqualTo(app)
     }
 }

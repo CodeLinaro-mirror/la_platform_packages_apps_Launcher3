@@ -79,8 +79,7 @@ public class LauncherAppWidgetHostView extends BaseLauncherAppWidgetHostView
     private Runnable mAutoAdvanceRunnable;
 
     private long mDeferUpdatesUntilMillis = 0;
-    private RemoteViews mLastRemoteViews;
-    private boolean mReapplyOnResumeUpdates = false;
+    RemoteViews mLastRemoteViews;
 
     private boolean mTrackingWidgetUpdate = false;
 
@@ -139,28 +138,16 @@ public class LauncherAppWidgetHostView extends BaseLauncherAppWidgetHostView
                     TRACE_METHOD_NAME + getAppWidgetInfo().provider, getAppWidgetId());
             mTrackingWidgetUpdate = false;
         }
-        mLastRemoteViews = remoteViews;
-        mReapplyOnResumeUpdates = isDeferringUpdates();
-        if (mReapplyOnResumeUpdates) {
+        if (isDeferringUpdates()) {
+            mLastRemoteViews = remoteViews;
             return;
         }
+        mLastRemoteViews = null;
 
         super.updateAppWidget(remoteViews);
 
         // The provider info or the views might have changed.
         checkIfAutoAdvance();
-    }
-
-    @Override
-    public void onViewAdded(View child) {
-        super.onViewAdded(child);
-        mReapplyOnResumeUpdates |= isDeferringUpdates();
-    }
-
-    @Override
-    public void onViewRemoved(View child) {
-        super.onViewRemoved(child);
-        mReapplyOnResumeUpdates |= isDeferringUpdates();
     }
 
     private boolean checkScrollableRecursively(ViewGroup viewGroup) {
@@ -217,16 +204,18 @@ public class LauncherAppWidgetHostView extends BaseLauncherAppWidgetHostView
      * {@link #updateAppWidget} and apply any deferred updates.
      */
     public void endDeferringUpdates() {
+        RemoteViews remoteViews;
         mDeferUpdatesUntilMillis = 0;
-        if (mReapplyOnResumeUpdates) {
-            updateAppWidget(mLastRemoteViews);
+        remoteViews = mLastRemoteViews;
+
+        if (remoteViews != null) {
+            updateAppWidget(remoteViews);
         }
     }
 
-    @Override
     public boolean onInterceptTouchEvent(MotionEvent ev) {
         if (ev.getAction() == MotionEvent.ACTION_DOWN) {
-            BaseDragLayer<?> dragLayer = mActivityContext.getDragLayer();
+            BaseDragLayer dragLayer = mActivityContext.getDragLayer();
             if (mIsScrollable) {
                 dragLayer.requestDisallowInterceptTouchEvent(true);
             }
@@ -236,7 +225,6 @@ public class LauncherAppWidgetHostView extends BaseLauncherAppWidgetHostView
         return mLongPressHelper.hasPerformedLongPress();
     }
 
-    @Override
     public boolean onTouchEvent(MotionEvent ev) {
         mLongPressHelper.onTouchEvent(ev);
         // We want to keep receiving though events to be able to cancel long press on ACTION_UP

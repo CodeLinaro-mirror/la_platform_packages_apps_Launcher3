@@ -655,28 +655,20 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
      * Tells SysUI to show a shortcut bubble.
      *
      * @param info the shortcut info used to create or identify the bubble.
-     * @param bubbleBarLocation the optional location of the bubble bar.
      */
-    @JvmOverloads
-    fun showShortcutBubble(info: ShortcutInfo?, bubbleBarLocation: BubbleBarLocation? = null) =
+    fun showShortcutBubble(info: ShortcutInfo?) =
         executeWithErrorLog({ "Failed call showShortcutBubble" }) {
-            bubbles?.showShortcutBubble(info, bubbleBarLocation)
+            bubbles?.showShortcutBubble(info)
         }
 
     /**
      * Tells SysUI to show a bubble of an app.
      *
      * @param intent the intent used to create the bubble.
-     * @param bubbleBarLocation the optional location of the bubble bar.
      */
-    @JvmOverloads
-    fun showAppBubble(
-        intent: Intent?,
-        user: UserHandle,
-        bubbleBarLocation: BubbleBarLocation? = null,
-    ) =
+    fun showAppBubble(intent: Intent?, user: UserHandle) =
         executeWithErrorLog({ "Failed call showAppBubble" }) {
-            bubbles?.showAppBubble(intent, user, bubbleBarLocation)
+            bubbles?.showAppBubble(intent, user)
         }
 
     /** Tells SysUI to show the expanded view. */

@@ -36,6 +36,7 @@ import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
+import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
@@ -56,7 +57,6 @@ import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
 import com.android.launcher3.anim.AnimatorListeners;
-import com.android.launcher3.taskbar.TypefaceUtils;
 import com.android.launcher3.views.ClipIconView;
 import com.android.quickstep.interaction.EdgeBackGestureHandler.BackGestureAttemptCallback;
 import com.android.quickstep.interaction.NavBarGestureHandler.NavBarGestureAttemptCallback;
@@ -123,10 +123,13 @@ abstract class TutorialController implements BackGestureAttemptCallback,
 
     // These runnables  should be used when posting callbacks to their views and cleared from their
     // views before posting new callbacks.
+    private final Runnable mTitleViewCallback;
+    private final Runnable mSubtitleViewCallback;
     @Nullable private Runnable mFeedbackViewCallback;
     @Nullable private Runnable mFakeTaskViewCallback;
     @Nullable private Runnable mFakeTaskbarViewCallback;
     private final Runnable mShowFeedbackRunnable;
+    private final AccessibilityManager mAccessibilityManager;
 
     TutorialController(TutorialFragment tutorialFragment, TutorialType tutorialType) {
         mTutorialFragment = tutorialFragment;
@@ -174,7 +177,6 @@ abstract class TutorialController implements BackGestureAttemptCallback,
 
         mFeedbackTitleView.setText(getIntroductionTitle());
         mFeedbackSubtitleView.setText(getIntroductionSubtitle());
-        setTitleTypefaces();
 
         mExitingAppView.setClipToOutline(true);
         mExitingAppView.setOutlineProvider(new ViewOutlineProvider() {
@@ -183,6 +185,17 @@ abstract class TutorialController implements BackGestureAttemptCallback,
                 outline.setRoundRect(mExitingAppRect, mExitingAppRadius);
             }
         });
+
+        mAccessibilityManager = AccessibilityManager.getInstance(mContext);
+        mTitleViewCallback = () -> {
+            mFeedbackTitleView.requestFocus();
+            mFeedbackTitleView.sendAccessibilityEvent(
+                    AccessibilityEvent.TYPE_VIEW_FOCUSED);
+        };
+        mSubtitleViewCallback = () -> {
+            mFeedbackSubtitleView.requestFocus();
+            mFeedbackSubtitleView.sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_FOCUSED);
+        };
         mShowFeedbackRunnable = () -> {
             mFeedbackView.setAlpha(0f);
             mFeedbackView.setScaleX(0.95f);
@@ -201,14 +214,14 @@ abstract class TutorialController implements BackGestureAttemptCallback,
                             mFeedbackViewCallback = mTutorialFragment::continueTutorial;
                             mFeedbackView.postDelayed(
                                     mFeedbackViewCallback,
-                                    AccessibilityManager.getInstance(mContext)
-                                            .getRecommendedTimeoutMillis(
-                                                    ADVANCE_TUTORIAL_TIMEOUT_MS,
-                                                    AccessibilityManager.FLAG_CONTENT_TEXT
+                                    mAccessibilityManager.getRecommendedTimeoutMillis(
+                                            ADVANCE_TUTORIAL_TIMEOUT_MS,
+                                            AccessibilityManager.FLAG_CONTENT_TEXT
                                                     | AccessibilityManager.FLAG_CONTENT_CONTROLS));
                         }
                     })
                     .start();
+            mFeedbackTitleView.postDelayed(mTitleViewCallback, FEEDBACK_ANIMATION_MS);
         };
     }
 
@@ -401,6 +414,8 @@ abstract class TutorialController implements BackGestureAttemptCallback,
             int titleResId,
             int subtitleResId,
             boolean isGestureSuccessful) {
+        mFeedbackTitleView.removeCallbacks(mTitleViewCallback);
+        mFeedbackSubtitleView.removeCallbacks(mSubtitleViewCallback);
         if (mFeedbackViewCallback != null) {
             mFeedbackView.removeCallbacks(mFeedbackViewCallback);
             mFeedbackViewCallback = null;
@@ -408,12 +423,17 @@ abstract class TutorialController implements BackGestureAttemptCallback,
 
         mFeedbackTitleView.setText(titleResId);
         mFeedbackSubtitleView.setText(subtitleResId);
+        mFeedbackTitleView.postDelayed(mTitleViewCallback, mAccessibilityManager
+                .getRecommendedTimeoutMillis(
+                        FEEDBACK_ANIMATION_MS,
+                        AccessibilityManager.FLAG_CONTENT_TEXT));
+        mFeedbackSubtitleView.postDelayed(mSubtitleViewCallback, mAccessibilityManager
+                .getRecommendedTimeoutMillis(
+                        SUBTITLE_ANNOUNCE_DELAY_MS,
+                        AccessibilityManager.FLAG_CONTENT_TEXT));
+
         if (isGestureSuccessful) {
             if (mTutorialFragment.isAtFinalStep()) {
-                TypefaceUtils.setTypeface(
-                        mDoneButton,
-                        TypefaceUtils.FONT_FAMILY_LABEL_LARGE_BASELINE
-                );
                 showActionButton();
             }
 
@@ -438,8 +458,7 @@ abstract class TutorialController implements BackGestureAttemptCallback,
         pauseAndHideLottieAnimation();
         mCheckmarkAnimation.setVisibility(View.VISIBLE);
         mCheckmarkAnimation.playAnimation();
-        mFeedbackTitleView.setTextAppearance(getSuccessTitleTextAppearance());
-        setTitleTypefaces();
+        mFeedbackTitleView.setTextAppearance(mContext, getSuccessTitleTextAppearance());
     }
 
     public boolean isGestureCompleted() {
@@ -468,6 +487,8 @@ abstract class TutorialController implements BackGestureAttemptCallback,
             mFakeTaskbarView.removeCallbacks(mFakeTaskbarViewCallback);
             mFakeTaskbarViewCallback = null;
         }
+        mFeedbackTitleView.removeCallbacks(mTitleViewCallback);
+        mFeedbackSubtitleView.removeCallbacks(mSubtitleViewCallback);
     }
 
     private void playFeedbackAnimation() {
@@ -492,10 +513,8 @@ abstract class TutorialController implements BackGestureAttemptCallback,
         updateDrawables();
         updateLayout();
 
-        mFeedbackTitleView.setTextAppearance(getTitleTextAppearance());
-        mDoneButton.setTextAppearance(getDoneButtonTextAppearance());
-
-        setTitleTypefaces();
+        mFeedbackTitleView.setTextAppearance(mContext, getTitleTextAppearance());
+        mDoneButton.setTextAppearance(mContext, getDoneButtonTextAppearance());
         mDoneButton.getBackground().setTint(getDoneButtonColor());
         mCheckmarkAnimation.setAnimation(mTutorialFragment.isAtFinalStep()
                 ? R.raw.checkmark_animation_end
@@ -512,21 +531,6 @@ abstract class TutorialController implements BackGestureAttemptCallback,
         if (mFakeHotseatView != null) {
             mFakeHotseatView.setVisibility(View.INVISIBLE);
         }
-    }
-
-    /**
-     * Apply expressive typefaces to the feedback title and subtitle views.
-     */
-    private void setTitleTypefaces() {
-        TypefaceUtils.setTypeface(
-                mFeedbackTitleView,
-                mTutorialFragment.isLargeScreen()
-                        ? TypefaceUtils.FONT_FAMILY_DISPLAY_MEDIUM_EMPHASIZED
-                        : TypefaceUtils.FONT_FAMILY_DISPLAY_SMALL_EMPHASIZED);
-        TypefaceUtils.setTypeface(
-                mFeedbackSubtitleView,
-                TypefaceUtils.FONT_FAMILY_BODY_LARGE_BASELINE
-        );
     }
 
     protected void resetViewsForBackGesture() {
@@ -560,6 +564,13 @@ abstract class TutorialController implements BackGestureAttemptCallback,
         mSkipButton.setVisibility(GONE);
         mDoneButton.setVisibility(View.VISIBLE);
         mDoneButton.setOnClickListener(this::onActionButtonClicked);
+        mDoneButton.postDelayed(() -> {
+            mDoneButton.requestFocus();
+            mDoneButton.sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED);
+        }, mAccessibilityManager
+                .getRecommendedTimeoutMillis(
+                        DONE_BUTTON_ANNOUNCE_DELAY_MS,
+                        AccessibilityManager.FLAG_CONTENT_CONTROLS));
     }
 
     void hideFakeTaskbar(boolean animateToHotseat) {

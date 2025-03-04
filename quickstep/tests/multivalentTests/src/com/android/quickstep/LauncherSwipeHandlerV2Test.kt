@@ -91,14 +91,7 @@ class LauncherSwipeHandlerV2Test {
                 .bindRotationHelper(mock(RotationTouchHelper::class.java))
                 .bindRecentsState(mock(RecentsAnimationDeviceState::class.java))
         )
-        gestureState =
-            spy(
-                GestureState(
-                    OverviewComponentObserver.INSTANCE.get(sandboxContext),
-                    DEFAULT_DISPLAY,
-                    0,
-                )
-            )
+        gestureState = spy(GestureState(OverviewComponentObserver.INSTANCE.get(sandboxContext), 0))
 
         underTest =
             LauncherSwipeHandlerV2(

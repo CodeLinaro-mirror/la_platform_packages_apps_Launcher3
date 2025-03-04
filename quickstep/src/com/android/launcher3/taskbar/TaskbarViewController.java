@@ -83,16 +83,14 @@ import com.android.launcher3.model.data.ItemInfo;
 import com.android.launcher3.model.data.TaskItemInfo;
 import com.android.launcher3.taskbar.bubbles.BubbleBarController;
 import com.android.launcher3.taskbar.bubbles.BubbleControllers;
-import com.android.launcher3.taskbar.customization.TaskbarAllAppsButtonContainer;
-import com.android.launcher3.taskbar.customization.TaskbarDividerContainer;
 import com.android.launcher3.util.DisplayController;
 import com.android.launcher3.util.ItemInfoMatcher;
 import com.android.launcher3.util.LauncherBindableItemsContainer;
+import com.android.launcher3.util.MainThreadInitializedObject.SandboxContext;
 import com.android.launcher3.util.MultiPropertyFactory;
 import com.android.launcher3.util.MultiPropertyFactory.MultiProperty;
 import com.android.launcher3.util.MultiTranslateDelegate;
 import com.android.launcher3.util.MultiValueAlpha;
-import com.android.launcher3.util.SandboxContext;
 import com.android.quickstep.util.GroupTask;
 import com.android.quickstep.util.SingleTask;
 import com.android.systemui.shared.recents.model.Task;
@@ -123,10 +121,9 @@ public class TaskbarViewController implements TaskbarControllers.LoggableTaskbar
     public static final int ALPHA_INDEX_NOTIFICATION_EXPANDED = 4;
     public static final int ALPHA_INDEX_ASSISTANT_INVOKED = 5;
     public static final int ALPHA_INDEX_SMALL_SCREEN = 6;
-    public static final int ALPHA_INDEX_BUBBLE_BAR = 7;
-    public static final int ALPHA_INDEX_RECREATE = 8;
 
-    private static final int NUM_ALPHA_CHANNELS = 9;
+    public static final int ALPHA_INDEX_BUBBLE_BAR = 7;
+    private static final int NUM_ALPHA_CHANNELS = 8;
 
     /** Only used for animation purposes, to position the divider between two item indices. */
     public static final float DIVIDER_VIEW_POSITION_OFFSET = 0.5f;
@@ -241,22 +238,9 @@ public class TaskbarViewController implements TaskbarControllers.LoggableTaskbar
                 R.dimen.transient_taskbar_padding);
     }
 
-    /**
-     * Init of taskbar view controller.
-     */
-    public void init(TaskbarControllers controllers, AnimatorSet startAnimation) {
+    public void init(TaskbarControllers controllers) {
         mControllers = controllers;
         controllers.bubbleControllers.ifPresent(bc -> mBubbleControllers = bc);
-
-        if (startAnimation != null) {
-            MultiPropertyFactory<View>.MultiProperty multiProperty =
-                    mTaskbarIconAlpha.get(ALPHA_INDEX_RECREATE);
-            multiProperty.setValue(0f);
-            Animator animator = multiProperty.animateToValue(1f);
-            animator.setInterpolator(EMPHASIZED);
-            startAnimation.play(animator);
-        }
-
         mTaskbarView.init(TaskbarViewCallbacksFactory.newInstance(mActivity).create(
                 mActivity, mControllers, mTaskbarView));
         mTaskbarView.getLayoutParams().height = mActivity.isPhoneMode()
@@ -376,15 +360,6 @@ public class TaskbarViewController implements TaskbarControllers.LoggableTaskbar
      */
     public void announceForAccessibility() {
         mTaskbarView.announceAccessibilityChanges();
-    }
-
-    /**
-     * Called with destroying Taskbar with animation.
-     */
-    public void onDestroyAnimation(AnimatorSet animatorSet) {
-        animatorSet.play(
-                mTaskbarIconAlpha.get(TaskbarViewController.ALPHA_INDEX_RECREATE).animateToValue(
-                        0f));
     }
 
     public void onDestroy() {
@@ -737,19 +712,8 @@ public class TaskbarViewController implements TaskbarControllers.LoggableTaskbar
         for (View iconView : getIconViews()) {
             if (iconView instanceof BubbleTextView btv) {
                 btv.updateRunningState(getRunningAppState(btv));
-                if (shouldUpdateIconContentDescription(btv)) {
-                    btv.setContentDescription(
-                            btv.getContentDescription() + " " + btv.getIconStateDescription());
-                }
             }
         }
-    }
-
-    private boolean shouldUpdateIconContentDescription(BubbleTextView btv) {
-        boolean isInDesktopMode = mControllers.taskbarDesktopModeController.isInDesktopMode();
-        boolean isAllAppsButton = btv instanceof TaskbarAllAppsButtonContainer;
-        boolean isDividerButton = btv instanceof TaskbarDividerContainer;
-        return isInDesktopMode && !isAllAppsButton && !isDividerButton;
     }
 
     /**
@@ -1180,8 +1144,11 @@ public class TaskbarViewController implements TaskbarControllers.LoggableTaskbar
         mTaskbarNavButtonTranslationY.updateValue(-deviceProfile.getTaskbarOffsetY());
     }
 
-    public LauncherBindableItemsContainer getContent() {
-        return mModelCallbacks;
+    /**
+     * Maps the given operator to all the top-level children of TaskbarView.
+     */
+    public void mapOverItems(LauncherBindableItemsContainer.ItemOperator op) {
+        mTaskbarView.mapOverItems(op);
     }
 
     /**
@@ -1332,7 +1299,7 @@ public class TaskbarViewController implements TaskbarControllers.LoggableTaskbar
         ObjectAnimator animator = mIconsTranslationXForNavbar.animateToValue(translationX);
         animator.setStartDelay(FADE_OUT_ANIM_POSITION_DURATION_MS);
         animator.setDuration(FADE_IN_ANIM_ALPHA_DURATION_MS);
-        animator.setInterpolator(EMPHASIZED);
+        animator.setInterpolator(Interpolators.EMPHASIZED);
         return animator;
     }
 }

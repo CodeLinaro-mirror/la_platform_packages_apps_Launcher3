@@ -186,7 +186,6 @@ public class TaskbarDragLayer extends BaseDragLayer<TaskbarActivityContext> {
 
     @Override
     protected void dispatchDraw(Canvas canvas) {
-        if (mContainer.isDestroyed()) return;
         float backgroundHeight = mControllerCallbacks.getTaskbarBackgroundHeight()
                 * (1f - mTaskbarBackgroundOffset);
         mBackgroundRenderer.setBackgroundHeight(backgroundHeight);
@@ -285,21 +284,6 @@ public class TaskbarDragLayer extends BaseDragLayer<TaskbarActivityContext> {
         }
         return super.dispatchKeyEvent(event);
     }
-
-    /**
-     * Sets animation boolean when only animating persistent taskbar.
-     */
-    public void setIsAnimatingPersistentTaskbarBackground(boolean animatingPersistentTaskbarBg) {
-        mBackgroundRenderer.setAnimatingPersistentTaskbar(animatingPersistentTaskbarBg);
-    }
-
-    /**
-     * Sets animation boolean when only animating transient taskbar.
-     */
-    public void setIsAnimatingTransientTaskbarBackground(boolean animatingTransientTaskbarBg) {
-        mBackgroundRenderer.setAnimatingTransientTaskbar(animatingTransientTaskbarBg);
-    }
-
 
     /**
      * Sets the width percentage to inset the transient taskbar's background from the left and from

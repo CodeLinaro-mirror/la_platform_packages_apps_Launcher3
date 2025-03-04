@@ -61,7 +61,6 @@ public class TaskbarModelCallbacks implements
     // Used to defer any UI updates during the SUW unstash animation.
     private boolean mDeferUpdatesForSUW;
     private Runnable mDeferredUpdates;
-    private boolean mBindingItems = false;
 
     public TaskbarModelCallbacks(
             TaskbarActivityContext context, TaskbarView container) {
@@ -75,14 +74,14 @@ public class TaskbarModelCallbacks implements
 
     @Override
     public void startBinding() {
-        mBindingItems = true;
+        mContext.setBindingItems(true);
         mHotseatItems.clear();
         mPredictedItems = Collections.emptyList();
     }
 
     @Override
     public void finishBindingItems(IntSet pagesBoundFirst) {
-        mBindingItems = false;
+        mContext.setBindingItems(false);
         commitItemsToUI();
     }
 
@@ -168,7 +167,7 @@ public class TaskbarModelCallbacks implements
     }
 
     private void commitItemsToUI() {
-        if (mBindingItems) {
+        if (mContext.isBindingItems()) {
             return;
         }
 

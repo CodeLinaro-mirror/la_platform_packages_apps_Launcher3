@@ -53,7 +53,6 @@ CONTAINER : RecentsViewContainer {
             recentsView.pagedOrientationHandler.upDownSwipeDirection,
         )
     private val isRtl = isRtl(container.resources)
-    private val downDirection = recentsView.pagedOrientationHandler.getDownDirection(isRtl)
 
     private var taskBeingDragged: TaskView? = null
     private var launchEndDisplacement: Float = 0f
@@ -105,11 +104,7 @@ CONTAINER : RecentsViewContainer {
             }
         }
         onControllerTouchEvent(ev)
-        val downDirectionIsNegative = downDirection == SingleAxisSwipeDetector.DIRECTION_NEGATIVE
-        val wasInitialTouchDown =
-            (downDirectionIsNegative && !detector.wasInitialTouchPositive()) ||
-                (!downDirectionIsNegative && detector.wasInitialTouchPositive())
-        return detector.isDraggingState && wasInitialTouchDown
+        return detector.isDraggingState && !detector.wasInitialTouchPositive()
     }
 
     override fun onControllerTouchEvent(ev: MotionEvent) = detector.onTouchEvent(ev)
@@ -125,12 +120,15 @@ CONTAINER : RecentsViewContainer {
                 }
                 ?.also {
                     verticalFactor =
-                        recentsView.pagedOrientationHandler.getTaskDragDisplacementFactor(isRtl)
+                        recentsView.pagedOrientationHandler.secondaryTranslationDirectionFactor
                 }
         if (!canTaskLaunchTaskView(taskBeingDragged)) {
             return false
         }
-        detector.setDetectableScrollConditions(downDirection, /* ignoreSlop= */ false)
+        detector.setDetectableScrollConditions(
+            recentsView.pagedOrientationHandler.getDownDirection(isRtl),
+            /* ignoreSlop = */ false,
+        )
         return true
     }
 
@@ -145,10 +143,7 @@ CONTAINER : RecentsViewContainer {
             recentsView.createTaskLaunchAnimation(taskBeingDragged, maxDuration, ZOOM_IN)
         // Since the thumbnail is what is filling the screen, based the end displacement on it.
         taskBeingDragged.getThumbnailBounds(tempRect, /* relativeToDragLayer= */ true)
-        launchEndDisplacement =
-            recentsView.pagedOrientationHandler
-                .getTaskLaunchLength(secondaryLayerDimension, tempRect)
-                .toFloat() * verticalFactor
+        launchEndDisplacement = (secondaryLayerDimension - tempRect.bottom).toFloat()
         playbackController =
             pendingAnimation.createPlaybackController()?.apply {
                 taskViewRecentsTouchContext.onUserControlledAnimationCreated(this)
@@ -168,9 +163,8 @@ CONTAINER : RecentsViewContainer {
 
         val isBeyondLaunchThreshold =
             abs(playbackController.progressFraction) > abs(LAUNCH_THRESHOLD_FRACTION)
-        val velocityIsNegative = !recentsView.pagedOrientationHandler.isGoingUp(velocity, isRtl)
-        val isFlingingTowardsLaunch = detector.isFling(velocity) && velocityIsNegative
-        val isFlingingTowardsRestState = detector.isFling(velocity) && !velocityIsNegative
+        val isFlingingTowardsLaunch = detector.isFling(velocity) && velocity > 0
+        val isFlingingTowardsRestState = detector.isFling(velocity) && velocity < 0
         val isLaunching =
             isFlingingTowardsLaunch || (isBeyondLaunchThreshold && !isFlingingTowardsRestState)
 

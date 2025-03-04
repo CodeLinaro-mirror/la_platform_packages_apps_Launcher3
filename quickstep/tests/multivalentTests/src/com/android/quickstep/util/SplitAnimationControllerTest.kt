@@ -94,7 +94,6 @@ class SplitAnimationControllerTest {
         whenever(mockTaskContainer.task).thenReturn(mockTask)
         whenever(mockIconView.drawable).thenReturn(mockTaskViewDrawable)
         whenever(mockTaskView.taskContainers).thenReturn(List(1) { mockTaskContainer })
-        whenever(mockTaskView.firstTaskContainer).thenReturn(mockTaskContainer)
 
         whenever(splitSelectSource.drawable).thenReturn(mockSplitSourceDrawable)
         whenever(splitSelectSource.view).thenReturn(mockSplitSourceView)

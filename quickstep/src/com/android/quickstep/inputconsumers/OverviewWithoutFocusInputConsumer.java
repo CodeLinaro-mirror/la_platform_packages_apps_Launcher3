@@ -43,12 +43,9 @@ public class OverviewWithoutFocusInputConsumer implements InputConsumer,
     private final TriggerSwipeUpTouchTracker mTriggerSwipeUpTracker;
     private final GestureState mGestureState;
 
-    public OverviewWithoutFocusInputConsumer(
-            Context context,
-            RecentsAnimationDeviceState deviceState,
-            GestureState gestureState,
-            InputMonitorCompat inputMonitor,
-            boolean disableHorizontalSwipe) {
+    public OverviewWithoutFocusInputConsumer(Context context,
+            RecentsAnimationDeviceState deviceState, GestureState gestureState,
+            InputMonitorCompat inputMonitor, boolean disableHorizontalSwipe) {
         mContext = context;
         mGestureState = gestureState;
         mInputMonitor = inputMonitor;
@@ -59,11 +56,6 @@ public class OverviewWithoutFocusInputConsumer implements InputConsumer,
     @Override
     public int getType() {
         return TYPE_OVERVIEW_WITHOUT_FOCUS;
-    }
-
-    @Override
-    public int getDisplayId() {
-        return mGestureState.getDisplayId();
     }
 
     @Override

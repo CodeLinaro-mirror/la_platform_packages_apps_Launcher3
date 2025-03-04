@@ -28,6 +28,7 @@ import static com.android.launcher3.util.Executors.MODEL_EXECUTOR;
 
 import static java.util.Collections.emptyList;
 
+import android.os.Process;
 import android.os.Trace;
 import android.util.Log;
 import android.util.Pair;
@@ -351,8 +352,14 @@ public class BaseLauncherBinder {
                 onCompleteSignal.executeAllAndDestroy();
             }
 
-            executeCallbacksTask(c -> c.onInitialBindComplete(currentScreenIds, pendingTasks,
-                    onCompleteSignal, workspaceItemCount, isBindSync), mUiExecutor);
+            executeCallbacksTask(
+                    c -> {
+                        if (!enableWorkspaceInflation()) {
+                            MODEL_EXECUTOR.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
+                        }
+                        c.onInitialBindComplete(currentScreenIds, pendingTasks, onCompleteSignal,
+                                workspaceItemCount, isBindSync);
+                    }, mUiExecutor);
         }
 
         private void setupPendingBind(
@@ -362,8 +369,12 @@ public class BaseLauncherBinder {
             executeCallbacksTask(c -> c.bindStringCache(cacheClone), pendingExecutor);
 
             executeCallbacksTask(c -> c.finishBindingItems(currentScreenIds), pendingExecutor);
-            pendingExecutor.execute(() -> ItemInstallQueue.INSTANCE.get(mApp.getContext())
-                    .resumeModelPush(FLAG_LOADER_RUNNING));
+            pendingExecutor.execute(
+                    () -> {
+                        MODEL_EXECUTOR.setThreadPriority(Process.THREAD_PRIORITY_DEFAULT);
+                        ItemInstallQueue.INSTANCE.get(mApp.getContext())
+                                .resumeModelPush(FLAG_LOADER_RUNNING);
+                    });
         }
 
         /**

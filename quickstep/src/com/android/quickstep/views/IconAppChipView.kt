@@ -296,7 +296,7 @@ constructor(
     fun getMenuTranslationY(): MultiPropertyFactory<View>.MultiProperty =
         viewTranslationY[INDEX_MENU_TRANSLATION]
 
-    internal fun revealAnim(isRevealing: Boolean, animated: Boolean = true) {
+    internal fun revealAnim(isRevealing: Boolean) {
         cancelInProgressAnimations()
         val collapsedBackgroundBounds = getCollapsedBackgroundLtrBounds()
         val expandedBackgroundBounds = getExpandedBackgroundLtrBounds()
@@ -392,7 +392,6 @@ constructor(
             animator!!.setDuration(MENU_BACKGROUND_HIDE_DURATION.toLong())
         }
 
-        if (!animated) animator!!.duration = 0
         animator!!.interpolator = Interpolators.EMPHASIZED
         animator!!.start()
     }
@@ -428,6 +427,7 @@ constructor(
         private const val INDEX_CONTENT_ALPHA = 0
         private const val INDEX_COLOR_FILTER_ALPHA = 1
         private const val INDEX_MODAL_ALPHA = 2
+
         /** Used to hide the app chip for 90:10 flex split. */
         private const val INDEX_MINIMUM_RATIO_ALPHA = 3
 

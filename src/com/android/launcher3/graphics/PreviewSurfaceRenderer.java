@@ -64,6 +64,7 @@ import com.android.launcher3.model.BgDataModel;
 import com.android.launcher3.model.BgDataModel.Callbacks;
 import com.android.launcher3.model.LoaderTask;
 import com.android.launcher3.model.ModelDbController;
+import com.android.launcher3.provider.LauncherDbUtils;
 import com.android.launcher3.util.ComponentKey;
 import com.android.launcher3.util.RunnableList;
 import com.android.launcher3.util.Themes;
@@ -88,9 +89,8 @@ public class PreviewSurfaceRenderer {
     private static final String KEY_COLOR_RESOURCE_IDS = "color_resource_ids";
     private static final String KEY_COLOR_VALUES = "color_values";
     private static final String KEY_DARK_MODE = "use_dark_mode";
-    public static final String KEY_SKIP_ANIMATIONS = "skip_animations";
 
-    private final Context mContext;
+    private Context mContext;
     private SparseIntArray mPreviewColorOverride;
     private String mGridName;
     private String mShapeKey;
@@ -103,7 +103,6 @@ public class PreviewSurfaceRenderer {
     private final IBinder mHostToken;
     private final int mWidth;
     private final int mHeight;
-    private final boolean mSkipAnimations;
     private final int mDisplayId;
     private final Display mDisplay;
     private final WallpaperColors mWallpaperColors;
@@ -130,7 +129,6 @@ public class PreviewSurfaceRenderer {
         mHostToken = bundle.getBinder(KEY_HOST_TOKEN);
         mWidth = bundle.getInt(KEY_VIEW_WIDTH);
         mHeight = bundle.getInt(KEY_VIEW_HEIGHT);
-        mSkipAnimations = bundle.getBoolean(KEY_SKIP_ANIMATIONS, false);
         mDisplayId = bundle.getInt(KEY_DISPLAY_ID);
         mDisplay = context.getSystemService(DisplayManager.class)
                 .getDisplay(mDisplayId);
@@ -338,6 +336,16 @@ public class PreviewSurfaceRenderer {
             // Start the migration
             PreviewContext previewContext =
                     new PreviewContext(inflationContext, mGridName, mShapeKey);
+            // Copy existing data to preview DB
+            LauncherDbUtils.copyTable(LauncherAppState.getInstance(mContext)
+                            .getModel().getModelDbController().getDb(),
+                    TABLE_NAME,
+                    LauncherAppState.getInstance(previewContext)
+                            .getModel().getModelDbController().getDb(),
+                    TABLE_NAME,
+                    mContext);
+            LauncherAppState.getInstance(previewContext)
+                    .getModel().getModelDbController().clearEmptyDbFlag();
 
             BgDataModel bgModel = new BgDataModel();
             new LoaderTask(
@@ -424,7 +432,7 @@ public class PreviewSurfaceRenderer {
 
 
         if (!Flags.newCustomizationPickerUi()) {
-            view.setAlpha(mSkipAnimations ? 1 : 0);
+            view.setAlpha(0);
             view.animate().alpha(1)
                     .setInterpolator(new AccelerateDecelerateInterpolator())
                     .setDuration(FADE_IN_ANIMATION_DURATION)
@@ -445,7 +453,7 @@ public class PreviewSurfaceRenderer {
             );
             mViewRoot.setLayoutParams(layoutParams);
             mViewRoot.addView(view);
-            mViewRoot.setAlpha(mSkipAnimations ? 1 : 0);
+            mViewRoot.setAlpha(0);
             mViewRoot.animate().alpha(1)
                     .setInterpolator(new AccelerateDecelerateInterpolator())
                     .setDuration(FADE_IN_ANIMATION_DURATION)

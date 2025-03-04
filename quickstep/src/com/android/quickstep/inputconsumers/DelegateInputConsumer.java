@@ -17,21 +17,12 @@ public abstract class DelegateInputConsumer implements InputConsumer {
     protected final InputConsumer mDelegate;
     protected final InputMonitorCompat mInputMonitor;
 
-    private final int mDisplayId;
-
     protected int mState;
 
-    public DelegateInputConsumer(
-            int displayId, InputConsumer delegate, InputMonitorCompat inputMonitor) {
-        mDisplayId = displayId;
+    public DelegateInputConsumer(InputConsumer delegate, InputMonitorCompat inputMonitor) {
         mDelegate = delegate;
         mInputMonitor = inputMonitor;
         mState = STATE_INACTIVE;
-    }
-
-    @Override
-    public int getDisplayId() {
-        return mDisplayId;
     }
 
     @Override

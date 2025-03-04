@@ -17,7 +17,6 @@ package com.android.quickstep;
 
 import android.annotation.TargetApi;
 import android.os.Build;
-import android.view.Display;
 import android.view.InputEvent;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -66,10 +65,6 @@ public interface InputConsumer {
     InputConsumer NO_OP = () -> TYPE_NO_OP;
 
     int getType();
-
-    default int getDisplayId() {
-        return Display.DEFAULT_DISPLAY;
-    }
 
     /**
      * Returns true if the user has crossed the threshold for it to be an explicit action.

@@ -19,11 +19,8 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
 import android.os.Process
-import android.os.Process.THREAD_PRIORITY_FOREGROUND
-import androidx.annotation.IntDef
 import java.util.concurrent.AbstractExecutorService
 import java.util.concurrent.TimeUnit
-import kotlin.annotation.AnnotationRetention.SOURCE
 
 /** Extension of [AbstractExecutorService] which executed on a provided looper. */
 class LooperExecutor(looper: Looper, private val defaultPriority: Int) : AbstractExecutorService() {
@@ -42,8 +39,6 @@ class LooperExecutor(looper: Looper, private val defaultPriority: Int) : Abstrac
     /** Returns the looper for this executor */
     val looper: Looper
         get() = handler.looper
-
-    @ElevationCaller private var elevationFlags: Int = 0
 
     override fun execute(runnable: Runnable) {
         if (handler.looper == Looper.myLooper()) {
@@ -78,30 +73,15 @@ class LooperExecutor(looper: Looper, private val defaultPriority: Int) : Abstrac
     }
 
     /**
-     * Increases the priority of the thread for the [caller]. Multiple calls with same caller are
-     * ignored. The priority is reset once wall callers have restored priority
+     * Set the priority of a thread, based on Linux priorities.
+     *
+     * @param priority Linux priority level, from -20 for highest scheduling priority to 19 for
+     *   lowest scheduling priority.
+     * @see Process.setThreadPriority
      */
-    fun elevatePriority(@ElevationCaller caller: Int) {
-        val wasElevated = elevationFlags != 0
-        elevationFlags = elevationFlags.or(caller)
-        if (elevationFlags != 0 && !wasElevated)
-            Process.setThreadPriority(
-                (thread as HandlerThread).threadId,
-                THREAD_PRIORITY_FOREGROUND,
-            )
+    fun setThreadPriority(priority: Int) {
+        Process.setThreadPriority((thread as HandlerThread).threadId, priority)
     }
-
-    /** Restores to default priority if it was previously elevated */
-    fun restorePriority(@ElevationCaller caller: Int) {
-        val wasElevated = elevationFlags != 0
-        elevationFlags = elevationFlags.and(caller.inv())
-        if (elevationFlags == 0 && wasElevated)
-            Process.setThreadPriority((thread as HandlerThread).threadId, defaultPriority)
-    }
-
-    @Retention(SOURCE)
-    @IntDef(value = [CALLER_LOADER_TASK, CALLER_ICON_CACHE], flag = true)
-    annotation class ElevationCaller
 
     companion object {
         /** Utility method to get a started handler thread statically with the provided priority */
@@ -111,8 +91,5 @@ class LooperExecutor(looper: Looper, private val defaultPriority: Int) : Abstrac
             name: String,
             priority: Int = Process.THREAD_PRIORITY_DEFAULT,
         ): Looper = HandlerThread(name, priority).apply { start() }.looper
-
-        const val CALLER_LOADER_TASK = 1 shl 0
-        const val CALLER_ICON_CACHE = 1 shl 1
     }
 }

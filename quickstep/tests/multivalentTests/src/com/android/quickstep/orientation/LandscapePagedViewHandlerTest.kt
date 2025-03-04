@@ -62,7 +62,6 @@ class LandscapePagedViewHandlerTest {
             isRTL,
             OVERVIEW_TASK_MARGIN_PX,
             DIVIDER_SIZE_PX,
-            oneIconHiddenDueToSmallWidth = false,
         )
     }
 

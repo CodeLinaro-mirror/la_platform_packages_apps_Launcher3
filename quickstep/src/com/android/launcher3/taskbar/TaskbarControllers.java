@@ -15,7 +15,6 @@
  */
 package com.android.launcher3.taskbar;
 
-import android.animation.AnimatorSet;
 import android.content.pm.ActivityInfo.Config;
 
 import androidx.annotation.NonNull;
@@ -150,15 +149,15 @@ public class TaskbarControllers {
      * TaskbarControllers instance, but should be careful to only access things that were created
      * in constructors for now, as some controllers may still be waiting for init().
      */
-    public void init(@NonNull TaskbarSharedState sharedState, AnimatorSet startAnimation) {
+    public void init(@NonNull TaskbarSharedState sharedState) {
         mAreAllControllersInitialized = false;
         mSharedState = sharedState;
 
         taskbarDragController.init(this);
         navbarButtonsViewController.init(this);
         rotationButtonController.init();
-        taskbarDragLayerController.init(this, startAnimation);
-        taskbarViewController.init(this, startAnimation);
+        taskbarDragLayerController.init(this);
+        taskbarViewController.init(this);
         taskbarScrimViewController.init(this);
         taskbarUnfoldAnimationController.init(this);
         taskbarKeyguardController.init(navbarButtonsViewController);

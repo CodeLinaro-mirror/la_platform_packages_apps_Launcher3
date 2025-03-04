@@ -143,7 +143,7 @@ class SplitAnimationController(val splitSelectStateController: SplitSelectStateC
         } else {
             // Initiating split from overview on fullscreen task TaskView
             val taskView = taskViewSupplier.get()
-            taskView.firstTaskContainer!!.let {
+            taskView.taskContainers.first().let {
                 val drawable = getDrawable(it.iconView, splitSelectSource)
                 return SplitAnimInitProps(
                     it.snapshotView,

@@ -929,11 +929,7 @@ public final class LauncherInstrumentation {
                     waitUntilSystemLauncherObjectGone(OVERVIEW_RES_ID);
                     waitUntilSystemLauncherObjectGone(SPLIT_PLACEHOLDER_RES_ID);
                     waitUntilLauncherObjectGone(KEYBOARD_QUICK_SWITCH_RES_ID);
-                    if (isTaskbarShownOnHome()) {
-                        waitForSystemLauncherObject(TASKBAR_RES_ID);
-                    } else {
-                        waitUntilSystemLauncherObjectGone(TASKBAR_RES_ID);
-                    }
+                    waitUntilSystemLauncherObjectGone(TASKBAR_RES_ID);
 
                     return waitForLauncherObject(WORKSPACE_RES_ID);
                 }
@@ -951,9 +947,7 @@ public final class LauncherInstrumentation {
                     waitUntilLauncherObjectGone(WORKSPACE_RES_ID);
                     waitUntilLauncherObjectGone(WIDGETS_RES_ID);
                     waitUntilSystemLauncherObjectGone(OVERVIEW_RES_ID);
-                    if (isTransientTaskbar()) {
-                        waitUntilSystemLauncherObjectGone(TASKBAR_RES_ID);
-                    }
+                    waitUntilSystemLauncherObjectGone(TASKBAR_RES_ID);
                     waitUntilSystemLauncherObjectGone(SPLIT_PLACEHOLDER_RES_ID);
                     waitUntilLauncherObjectGone(KEYBOARD_QUICK_SWITCH_RES_ID);
 
@@ -965,8 +959,7 @@ public final class LauncherInstrumentation {
                     waitUntilSystemLauncherObjectGone(OVERVIEW_RES_ID);
                     waitUntilLauncherObjectGone(KEYBOARD_QUICK_SWITCH_RES_ID);
 
-                    if ((is3PLauncher() && isTablet() && !isTransientTaskbar())
-                            || isTaskbarShownOnHome()) {
+                    if (is3PLauncher() && isTablet() && !isTransientTaskbar()) {
                         waitForSystemLauncherObject(TASKBAR_RES_ID);
                     } else {
                         waitUntilSystemLauncherObjectGone(TASKBAR_RES_ID);
@@ -2426,12 +2419,6 @@ public final class LauncherInstrumentation {
     public boolean isTransientTaskbar() {
         return getTestInfo(TestProtocol.REQUEST_IS_TRANSIENT_TASKBAR)
                 .getBoolean(TestProtocol.TEST_INFO_RESPONSE_FIELD);
-    }
-
-    /** Whether taskbar will be shown on home for current default display. */
-    public boolean isTaskbarShownOnHome() {
-        return getTestInfo(TestProtocol.REQUEST_TASKBAR_SHOWN_ON_HOME).getBoolean(
-                TEST_INFO_RESPONSE_FIELD);
     }
 
     public boolean isImeDocked() {

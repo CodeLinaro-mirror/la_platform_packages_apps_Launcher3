@@ -88,16 +88,16 @@ class RecentsDisplayModelTest {
 
     @Test
     fun testCreateSeparateInstances() {
-        val displayId = Display.DEFAULT_DISPLAY + 1
-        runOnMainSync { recentsDisplayModel.storeDisplayResource(displayId) }
+        val display = Display.DEFAULT_DISPLAY + 1
+        runOnMainSync { recentsDisplayModel.createDisplayResource(display) }
 
         val defaultManager = recentsDisplayModel.getRecentsWindowManager(Display.DEFAULT_DISPLAY)
-        val secondaryManager = recentsDisplayModel.getRecentsWindowManager(displayId)
+        val secondaryManager = recentsDisplayModel.getRecentsWindowManager(display)
         Assert.assertNotSame(defaultManager, secondaryManager)
 
         val defaultInterface =
             recentsDisplayModel.getFallbackWindowInterface(Display.DEFAULT_DISPLAY)
-        val secondInterface = recentsDisplayModel.getFallbackWindowInterface(displayId)
+        val secondInterface = recentsDisplayModel.getFallbackWindowInterface(display)
         Assert.assertNotSame(defaultInterface, secondInterface)
     }
 

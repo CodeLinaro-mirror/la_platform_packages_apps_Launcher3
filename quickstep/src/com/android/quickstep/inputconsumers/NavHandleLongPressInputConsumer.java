@@ -74,14 +74,10 @@ public class NavHandleLongPressInputConsumer extends DelegateInputConsumer {
     private MotionEvent mCurrentMotionEvent;  // Most recent motion event.
     private boolean mDeepPressLogged;  // Whether deep press has been logged for the current touch.
 
-    public NavHandleLongPressInputConsumer(
-            Context context,
-            InputConsumer delegate,
-            InputMonitorCompat inputMonitor,
-            RecentsAnimationDeviceState deviceState,
-            NavHandle navHandle,
-            GestureState gestureState) {
-        super(gestureState.getDisplayId(), delegate, inputMonitor);
+    public NavHandleLongPressInputConsumer(Context context, InputConsumer delegate,
+            InputMonitorCompat inputMonitor, RecentsAnimationDeviceState deviceState,
+            NavHandle navHandle, GestureState gestureState) {
+        super(delegate, inputMonitor);
         mScreenWidth = DisplayController.INSTANCE.get(context).getInfo().currentSize.x;
         mDeepPressEnabled = DeviceConfigWrapper.get().getEnableLpnhDeepPress();
         ContextualSearchStateManager contextualSearchStateManager =
@@ -258,15 +254,13 @@ public class NavHandleLongPressInputConsumer extends DelegateInputConsumer {
             Log.d(TAG, "cancelLongPress: " + reason);
         }
         // Log LPNH abandon latency if we didn't trigger but were still prepared to.
-        if (mCurrentMotionEvent != null && mCurrentDownEvent != null) {
-            long latencyMs = mCurrentMotionEvent.getEventTime() - mCurrentDownEvent.getEventTime();
-            if (mState != STATE_ACTIVE && MAIN_EXECUTOR.getHandler().hasCallbacks(mTriggerLongPress)
-                    && latencyMs >= MIN_TIME_TO_LOG_ABANDON_MS) {
-                mStatsLogManager.latencyLogger()
-                        .withInstanceId(new InstanceIdSequence().newInstanceId())
-                        .withLatency(latencyMs)
-                        .log(LAUNCHER_LATENCY_CONTEXTUAL_SEARCH_LPNH_ABANDON);
-            }
+        long latencyMs = mCurrentMotionEvent.getEventTime() - mCurrentDownEvent.getEventTime();
+        if (mState != STATE_ACTIVE && MAIN_EXECUTOR.getHandler().hasCallbacks(mTriggerLongPress)
+                && latencyMs >= MIN_TIME_TO_LOG_ABANDON_MS) {
+            mStatsLogManager.latencyLogger()
+                    .withInstanceId(new InstanceIdSequence().newInstanceId())
+                    .withLatency(latencyMs)
+                    .log(LAUNCHER_LATENCY_CONTEXTUAL_SEARCH_LPNH_ABANDON);
         }
         mGestureState.setIsInExtendedSlopRegion(false);
         MAIN_EXECUTOR.getHandler().removeCallbacks(mTriggerLongPress);

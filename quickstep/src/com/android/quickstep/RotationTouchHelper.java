@@ -142,17 +142,15 @@ public class RotationTouchHelper implements DisplayInfoChangeListener {
         mContext = context;
         mDisplayController = displayController;
         mSystemUiProxy = systemUiProxy;
-        // TODO (b/398195845): this needs updating so non-default displays do not rotate with the
-        //  default display.
         mDisplayId = DEFAULT_DISPLAY;
 
         Resources resources = mContext.getResources();
         mOrientationTouchTransformer = new OrientationTouchTransformer(resources, mMode,
                 () -> QuickStepContract.getWindowCornerRadius(mContext));
 
-        // Register for navigation mode and rotation changes
-        mDisplayController.addChangeListenerForDisplay(this, mDisplayId);
-        DisplayController.Info info = mDisplayController.getInfoForDisplay(mDisplayId);
+        // Register for navigation mode changes
+        mDisplayController.addChangeListener(this);
+        DisplayController.Info info = mDisplayController.getInfo();
         onDisplayInfoChanged(context, info, CHANGE_ALL);
 
         mOrientationListener = new OrientationEventListener(mContext) {
@@ -176,7 +174,7 @@ public class RotationTouchHelper implements DisplayInfoChangeListener {
         };
 
         lifeCycle.addCloseable(() -> {
-            mDisplayController.removeChangeListenerForDisplay(this, mDisplayId);
+            mDisplayController.removeChangeListener(this);
             mOrientationListener.disable();
             TaskStackChangeListeners.getInstance()
                     .unregisterTaskStackListener(mFrozenTaskListener);
@@ -203,8 +201,7 @@ public class RotationTouchHelper implements DisplayInfoChangeListener {
             return;
         }
 
-        mOrientationTouchTransformer.createOrAddTouchRegion(
-                mDisplayController.getInfoForDisplay(mDisplayId),
+        mOrientationTouchTransformer.createOrAddTouchRegion(mDisplayController.getInfo(),
                 "RTH.updateGestureTouchRegions");
     }
 
@@ -261,8 +258,7 @@ public class RotationTouchHelper implements DisplayInfoChangeListener {
 
         if ((flags & CHANGE_NAVIGATION_MODE) != 0) {
             NavigationMode newMode = info.getNavigationMode();
-            mOrientationTouchTransformer.setNavigationMode(newMode,
-                    mDisplayController.getInfoForDisplay(mDisplayId),
+            mOrientationTouchTransformer.setNavigationMode(newMode, mDisplayController.getInfo(),
                     mContext.getResources());
 
             TaskStackChangeListeners.getInstance()
@@ -284,8 +280,7 @@ public class RotationTouchHelper implements DisplayInfoChangeListener {
      */
     void setGesturalHeight(int newGesturalHeight) {
         mOrientationTouchTransformer.setGesturalHeight(
-                newGesturalHeight, mDisplayController.getInfoForDisplay(mDisplayId),
-                mContext.getResources());
+                newGesturalHeight, mDisplayController.getInfo(), mContext.getResources());
     }
 
     /**
@@ -301,8 +296,7 @@ public class RotationTouchHelper implements DisplayInfoChangeListener {
     }
 
     private void enableMultipleRegions(boolean enable) {
-        mOrientationTouchTransformer.enableMultipleRegions(enable,
-                mDisplayController.getInfoForDisplay(mDisplayId));
+        mOrientationTouchTransformer.enableMultipleRegions(enable, mDisplayController.getInfo());
         notifySysuiOfCurrentRotation(mOrientationTouchTransformer.getQuickStepStartingRotation());
         if (enable && !mInOverview && !TestProtocol.sDisableSensorRotation) {
             // Clear any previous state from sensor manager
@@ -365,8 +359,7 @@ public class RotationTouchHelper implements DisplayInfoChangeListener {
      * notifies system UI of the primary rotation the user is interacting with
      */
     private void toggleSecondaryNavBarsForRotation() {
-        mOrientationTouchTransformer.setSingleActiveRegion(
-                mDisplayController.getInfoForDisplay(mDisplayId));
+        mOrientationTouchTransformer.setSingleActiveRegion(mDisplayController.getInfo());
         notifySysuiOfCurrentRotation(mOrientationTouchTransformer.getCurrentActiveRotation());
     }
 

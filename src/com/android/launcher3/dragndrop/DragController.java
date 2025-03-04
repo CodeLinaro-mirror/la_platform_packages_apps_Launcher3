@@ -521,13 +521,17 @@ public abstract class DragController<T extends ActivityContext>
 
         mDragObject.dragComplete = true;
         if (mIsInPreDrag) {
-            mDragObject.cancelled = true;
+            if (dropTarget != null) {
+                dropTarget.onDragExit(mDragObject);
+            }
+            return;
         }
+
         // Drop onto the target.
         boolean accepted = false;
         if (dropTarget != null) {
             dropTarget.onDragExit(mDragObject);
-            if (!mIsInPreDrag && dropTarget.acceptDrop(mDragObject)) {
+            if (dropTarget.acceptDrop(mDragObject)) {
                 if (flingAnimation != null) {
                     flingAnimation.run();
                 } else {
@@ -554,7 +558,7 @@ public abstract class DragController<T extends ActivityContext>
 
             target.getHitRectRelativeToDragLayer(r);
             if (r.contains(x, y)) {
-                mActivity.getDragLayer().mapCoordInSelfToDescendant(target.getDropView(),
+                mActivity.getDragLayer().mapCoordInSelfToDescendant((View) target,
                         mCoordinatesTemp);
                 mDragObject.x = mCoordinatesTemp[0];
                 mDragObject.y = mCoordinatesTemp[1];

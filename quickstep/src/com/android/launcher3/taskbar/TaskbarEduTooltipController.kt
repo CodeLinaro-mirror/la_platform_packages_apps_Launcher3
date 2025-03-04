@@ -39,7 +39,6 @@ import androidx.core.view.updateLayoutParams
 import com.airbnb.lottie.LottieAnimationView
 import com.android.launcher3.LauncherPrefs
 import com.android.launcher3.R
-import com.android.launcher3.RemoveAnimationSettingsTracker
 import com.android.launcher3.Utilities
 import com.android.launcher3.config.FeatureFlags.enableTaskbarPinning
 import com.android.launcher3.taskbar.TaskbarAutohideSuspendController.FLAG_AUTOHIDE_SUSPEND_EDU_OPEN
@@ -129,26 +128,6 @@ open class TaskbarEduTooltipController(context: Context) :
         activityContext.dragLayer.post { maybeShowSearchEdu() }
     }
 
-    /**
-     * Turns off auto play of lottie animations if user has opted to remove animation else attaches
-     * click listener to allow user to play or pause animations.
-     */
-    fun handleEduAnimations(animationViews: List<LottieAnimationView>) {
-        for (animationView in animationViews) {
-            if (
-                RemoveAnimationSettingsTracker.INSTANCE.get(animationView.context)
-                    .isRemoveAnimationEnabled()
-            ) {
-                animationView.pauseAnimation()
-            } else {
-                animationView.setOnClickListener {
-                    if (animationView.isAnimating) animationView.pauseAnimation()
-                    else animationView.playAnimation()
-                }
-            }
-        }
-    }
-
     /** Shows swipe EDU tooltip if it is the current [tooltipStep]. */
     fun maybeShowSwipeEdu() {
         if (
@@ -166,9 +145,7 @@ open class TaskbarEduTooltipController(context: Context) :
                 requireViewById(R.id.taskbar_edu_title),
                 TypefaceUtils.FONT_FAMILY_HEADLINE_SMALL_EMPHASIZED,
             )
-            val swipeAnimation = requireViewById<LottieAnimationView>(R.id.swipe_animation)
-            swipeAnimation.supportLightTheme()
-            handleEduAnimations(listOf(swipeAnimation))
+            requireViewById<LottieAnimationView>(R.id.swipe_animation).supportLightTheme()
             show()
         }
     }
@@ -197,7 +174,6 @@ open class TaskbarEduTooltipController(context: Context) :
             splitscreenAnim.supportLightTheme()
             suggestionsAnim.supportLightTheme()
             pinningAnim.supportLightTheme()
-            handleEduAnimations(listOf(splitscreenAnim, suggestionsAnim, pinningAnim))
             if (DisplayController.isTransientTaskbar(activityContext)) {
                 splitscreenAnim.setAnimation(R.raw.taskbar_edu_splitscreen_transient)
                 suggestionsAnim.setAnimation(R.raw.taskbar_edu_suggestions_transient)
@@ -273,6 +249,9 @@ open class TaskbarEduTooltipController(context: Context) :
 
         tooltip?.run {
             allowTouchDismissal = true
+            requireViewById<LottieAnimationView>(R.id.standalone_pinning_animation)
+                .supportLightTheme()
+
             TypefaceUtils.setTypeface(
                 requireViewById(R.id.taskbar_edu_title),
                 TypefaceUtils.FONT_FAMILY_HEADLINE_SMALL_EMPHASIZED,
@@ -282,10 +261,6 @@ open class TaskbarEduTooltipController(context: Context) :
                 TypefaceUtils.FONT_FAMILY_BODY_MEDIUM_BASELINE,
             )
 
-            val pinningAnim =
-                requireViewById<LottieAnimationView>(R.id.standalone_pinning_animation)
-            pinningAnim.supportLightTheme()
-            handleEduAnimations(listOf(pinningAnim))
             updateLayoutParams<BaseDragLayer.LayoutParams> {
                 if (DisplayController.isTransientTaskbar(activityContext)) {
                     bottomMargin += activityContext.deviceProfile.taskbarHeight
@@ -329,9 +304,7 @@ open class TaskbarEduTooltipController(context: Context) :
         inflateTooltip(R.layout.taskbar_edu_search)
         tooltip?.run {
             allowTouchDismissal = true
-            val searchEdu = requireViewById<LottieAnimationView>(R.id.search_edu_animation)
-            searchEdu.supportLightTheme()
-            handleEduAnimations(listOf(searchEdu))
+            requireViewById<LottieAnimationView>(R.id.search_edu_animation).supportLightTheme()
             val eduSubtitle: TextView = requireViewById(R.id.search_edu_text)
 
             TypefaceUtils.setTypeface(

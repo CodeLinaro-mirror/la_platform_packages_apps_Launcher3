@@ -163,7 +163,7 @@ public class RecentsWindowSwipeHandler extends AbsSwipeUpHandler<RecentsWindowMa
                 && endTarget == GestureState.GestureEndTarget.HOME;
         if (fromHomeToHome) {
             RecentsWindowManager manager =
-                    mRecentsDisplayModel.getRecentsWindowManager(mGestureState.getDisplayId());
+                    mRecentsDisplayModel.getRecentsWindowManager(mDeviceState.getDisplayId());
             if (manager != null) {
                 manager.startHome(/* finishRecentsAnimation= */ false);
             }
@@ -228,7 +228,7 @@ public class RecentsWindowSwipeHandler extends AbsSwipeUpHandler<RecentsWindowMa
             recentsCallback = () -> {
                 callback.run();
                 RecentsWindowManager manager =
-                        mRecentsDisplayModel.getRecentsWindowManager(mGestureState.getDisplayId());
+                        mRecentsDisplayModel.getRecentsWindowManager(mDeviceState.getDisplayId());
                 if (manager != null) {
                     manager.startHome();
                 }

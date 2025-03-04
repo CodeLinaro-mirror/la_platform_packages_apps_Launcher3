@@ -185,6 +185,7 @@ import com.android.launcher3.compat.AccessibilityManagerCompat;
 import com.android.launcher3.config.FeatureFlags;
 import com.android.launcher3.debug.TestEventEmitter;
 import com.android.launcher3.debug.TestEventEmitter.TestEvent;
+import com.android.launcher3.dot.DotInfo;
 import com.android.launcher3.dragndrop.DragController;
 import com.android.launcher3.dragndrop.DragLayer;
 import com.android.launcher3.dragndrop.DragView;
@@ -236,7 +237,6 @@ import com.android.launcher3.util.IntArray;
 import com.android.launcher3.util.IntSet;
 import com.android.launcher3.util.ItemInflater;
 import com.android.launcher3.util.KeyboardShortcutsDelegate;
-import com.android.launcher3.util.LauncherBindableItemsContainer;
 import com.android.launcher3.util.LockedUserState;
 import com.android.launcher3.util.MSDLPlayerWrapper;
 import com.android.launcher3.util.PackageUserKey;
@@ -544,7 +544,7 @@ public class Launcher extends StatefulActivity<LauncherState>
         mItemInflater = new ItemInflater<>(this, mAppWidgetHolder, getItemOnClickListener(),
                 mFocusHandler, new CellLayout(mWorkspace.getContext(), mWorkspace));
 
-        mPopupDataProvider = new PopupDataProvider(this);
+        mPopupDataProvider = new PopupDataProvider(this::updateNotificationDots);
         mWidgetPickerDataProvider = new WidgetPickerDataProvider();
         PillColorProvider.getInstance(mWorkspace.getContext()).registerObserver();
 
@@ -1598,6 +1598,11 @@ public class Launcher extends StatefulActivity<LauncherState>
 
     private final ScreenOnListener mScreenOnListener = this::onScreenOnChanged;
 
+    private void updateNotificationDots(Predicate<PackageUserKey> updatedDots) {
+        mWorkspace.updateNotificationDots(updatedDots);
+        mAppsView.getAppsStore().updateNotificationDots(updatedDots);
+    }
+
     @Override
     public void onAttachedToWindow() {
         super.onAttachedToWindow();
@@ -1669,7 +1674,7 @@ public class Launcher extends StatefulActivity<LauncherState>
         } else if (Intent.ACTION_ALL_APPS.equals(intent.getAction())) {
             showAllAppsFromIntent(alreadyOnHome);
         } else if (INTENT_ACTION_ALL_APPS_TOGGLE.equals(intent.getAction())) {
-            toggleAllApps(alreadyOnHome, true);
+            toggleAllAppsSearch(alreadyOnHome);
         } else if (Intent.ACTION_SHOW_WORK_APPS.equals(intent.getAction())) {
             showAllAppsWithSelectedTabFromIntent(alreadyOnHome,
                     ActivityAllAppsContainerView.AdapterHolder.WORK);
@@ -1683,15 +1688,12 @@ public class Launcher extends StatefulActivity<LauncherState>
         // Overridden
     }
 
-    /**
-     * Toggles Launcher All Apps.
-     * @param focusSearch Indicates whether to make All Apps keyboard ready for search.
-     */
-    public void toggleAllApps(boolean focusSearch) {
-        toggleAllApps(/* alreadyOnHome= */ true, focusSearch);
+    /** Toggles Launcher All Apps with keyboard ready for search. */
+    public void toggleAllAppsSearch() {
+        toggleAllAppsSearch(/* alreadyOnHome= */ true);
     }
 
-    private void toggleAllApps(boolean alreadyOnHome, boolean focusSearch) {
+    protected void toggleAllAppsSearch(boolean alreadyOnHome) {
         if (getStateManager().isInStableState(ALL_APPS)) {
             getStateManager().goToState(NORMAL, alreadyOnHome);
         } else {
@@ -1703,8 +1705,7 @@ public class Launcher extends StatefulActivity<LauncherState>
                     new AnimationSuccessListener() {
                         @Override
                         public void onAnimationSuccess(Animator animator) {
-                            if (focusSearch
-                                    && mAppsView.getSearchUiManager().getEditText() != null) {
+                            if (mAppsView.getSearchUiManager().getEditText() != null) {
                                 mAppsView.getSearchUiManager().getEditText().requestFocus();
                             }
                         }
@@ -2947,6 +2948,11 @@ public class Launcher extends StatefulActivity<LauncherState>
         return mModelCallbacks.getWorkspaceLoading();
     }
 
+    @Override
+    public boolean isBindingItems() {
+        return isWorkspaceLoading();
+    }
+
     /**
      * Returns true if a touch interaction is in progress
      */
@@ -3021,6 +3027,11 @@ public class Launcher extends StatefulActivity<LauncherState>
         return mWidgetPickerDataProvider;
     }
 
+    @Override
+    public DotInfo getDotInfoForItem(ItemInfo info) {
+        return mPopupDataProvider.getDotInfoForItem(info);
+    }
+
     @NonNull
     public LauncherOverlayManager getOverlayManager() {
         return mOverlayManager;
@@ -3033,12 +3044,6 @@ public class Launcher extends StatefulActivity<LauncherState>
     @Override
     public DragLayer getDragLayer() {
         return mDragLayer;
-    }
-
-    @NonNull
-    @Override
-    public LauncherBindableItemsContainer getContent() {
-        return mWorkspace;
     }
 
     @Override

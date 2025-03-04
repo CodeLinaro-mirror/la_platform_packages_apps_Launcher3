@@ -65,7 +65,6 @@ import android.view.inputmethod.EditorInfo;
 import android.widget.TextView;
 
 import androidx.annotation.IntDef;
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 import androidx.core.content.res.ResourcesCompat;
@@ -262,7 +261,7 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
     @Nullable
     private KeyboardInsetAnimationCallback mKeyboardInsetAnimationCallback;
 
-    private final @NonNull GradientDrawable mBackground;
+    private GradientDrawable mBackground;
 
     /**
      * Used to inflate the Workspace from XML.
@@ -284,10 +283,6 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
         // click).
         setFocusableInTouchMode(true);
 
-        mBackground = (GradientDrawable) Objects.requireNonNull(
-                ResourcesCompat.getDrawable(getResources(),
-                        R.drawable.round_rect_folder, getContext().getTheme()));
-        mBackground.setCallback(this);
     }
 
     @Override
@@ -300,6 +295,9 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
         super.onFinishInflate();
         final DeviceProfile dp = mActivityContext.getDeviceProfile();
         final int paddingLeftRight = dp.folderContentPaddingLeftRight;
+
+        mBackground = (GradientDrawable) ResourcesCompat.getDrawable(getResources(),
+                R.drawable.round_rect_folder, getContext().getTheme());
 
         mContent = findViewById(R.id.folder_content);
         mContent.setPadding(paddingLeftRight, dp.folderContentPaddingTop, paddingLeftRight, 0);
@@ -345,11 +343,6 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
             callBeginDragShared(v, options);
         }
         return true;
-    }
-
-    @Override
-    protected boolean verifyDrawable(@NonNull Drawable who) {
-        return super.verifyDrawable(who) || (who == mBackground);
     }
 
     void callBeginDragShared(View v, DragOptions options) {

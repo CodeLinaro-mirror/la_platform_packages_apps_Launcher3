@@ -68,7 +68,6 @@ import com.android.launcher3.dragndrop.DragDriver;
 import com.android.launcher3.dragndrop.DragOptions;
 import com.android.launcher3.dragndrop.DragView;
 import com.android.launcher3.dragndrop.DraggableView;
-import com.android.launcher3.folder.Folder;
 import com.android.launcher3.graphics.DragPreviewProvider;
 import com.android.launcher3.logger.LauncherAtom.ContainerInfo;
 import com.android.launcher3.logging.StatsLogManager;
@@ -117,7 +116,6 @@ public class TaskbarDragController extends DragController<BaseTaskbarContext> im
     private int mRegistrationY;
 
     private boolean mIsSystemDragInProgress;
-    private boolean mIsDropHandledByDropTarget;
 
     // Animation for the drag shadow back into position after an unsuccessful drag
     private ValueAnimator mReturnAnimator;
@@ -254,8 +252,7 @@ public class TaskbarDragController extends DragController<BaseTaskbarContext> im
                 /* originalView = */ btv,
                 dragLayerX + dragOffset.x,
                 dragLayerY + dragOffset.y,
-                (View target, DropTarget.DragObject d, boolean success) ->
-                        mIsDropHandledByDropTarget = success /* DragSource */,
+                (View target, DropTarget.DragObject d, boolean success) -> {} /* DragSource */,
                 btv.getTag() instanceof ItemInfo itemInfo ? itemInfo : null,
                 dragRect,
                 scale * iconScale,
@@ -564,7 +561,7 @@ public class TaskbarDragController extends DragController<BaseTaskbarContext> im
 
     @Override
     protected void endDrag() {
-        if (mDisallowGlobalDrag && !mIsDropHandledByDropTarget) {
+        if (mDisallowGlobalDrag) {
             // We need to explicitly set deferDragViewCleanupPostAnimation to true here so the
             // super call doesn't remove it from the drag layer before the animation completes.
             // This variable gets set in to false in super.dispatchDropComplete() because it
@@ -768,11 +765,8 @@ public class TaskbarDragController extends DragController<BaseTaskbarContext> im
 
     @Override
     public void addDropTarget(DropTarget target) {
-        if (target instanceof Folder) {
-            // we need to ignore Folder.
-            return;
-        }
-        super.addDropTarget(target);
+        // No-op as Taskbar currently doesn't support any drop targets internally.
+        // Note: if we do add internal DropTargets, we'll still need to ignore Folder.
     }
 
     @Override

@@ -28,7 +28,6 @@ import com.android.quickstep.util.isExternalDisplay
 import com.android.quickstep.views.RecentsView.RUNNING_TASK_ATTACH_ALPHA
 import com.android.systemui.shared.recents.model.ThumbnailData
 import java.util.function.BiConsumer
-import kotlin.reflect.KMutableProperty1
 
 /**
  * Helper class for [RecentsView]. This util class contains refactored and extracted functions from
@@ -85,9 +84,6 @@ class RecentsViewUtils(private val recentsView: RecentsView<*, *>) {
 
     /** Counts [TaskView]s that are large tiles. */
     fun getLargeTileCount(): Int = taskViews.count { it.isLargeTile }
-
-    /** Counts [TaskView]s that are grid tasks. */
-    fun getGridTaskCount(): Int = taskViews.count { it.isGridTask }
 
     /** Returns the first TaskView that should be displayed as a large tile. */
     fun getFirstLargeTaskView(): TaskView? =
@@ -306,19 +302,16 @@ class RecentsViewUtils(private val recentsView: RecentsView<*, *>) {
         }
 
     companion object {
-        class RecentsViewFloatProperty(
-            private val utilsProperty: KMutableProperty1<RecentsViewUtils, Float>
-        ) : FloatProperty<RecentsView<*, *>>(utilsProperty.name) {
-            override fun get(recentsView: RecentsView<*, *>): Float =
-                utilsProperty.get(recentsView.mUtils)
-
-            override fun setValue(recentsView: RecentsView<*, *>, value: Float) {
-                utilsProperty.set(recentsView.mUtils, value)
-            }
-        }
-
         @JvmField
-        val DESK_EXPLODE_PROGRESS = RecentsViewFloatProperty(RecentsViewUtils::deskExplodeProgress)
+        val DESK_EXPLODE_PROGRESS =
+            object : FloatProperty<RecentsView<*, *>>("deskExplodeProgress") {
+                override fun setValue(recentsView: RecentsView<*, *>, value: Float) {
+                    recentsView.mUtils.deskExplodeProgress = value
+                }
+
+                override fun get(recentsView: RecentsView<*, *>) =
+                    recentsView.mUtils.deskExplodeProgress
+            }
 
         val TEMP_RECT = Rect()
     }

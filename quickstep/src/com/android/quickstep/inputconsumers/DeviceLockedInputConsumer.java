@@ -108,11 +108,8 @@ public class DeviceLockedInputConsumer implements InputConsumer,
 
     private RecentsAnimationController mRecentsAnimationController;
 
-    public DeviceLockedInputConsumer(
-            Context context,
-            RecentsAnimationDeviceState deviceState,
-            TaskAnimationManager taskAnimationManager,
-            GestureState gestureState,
+    public DeviceLockedInputConsumer(Context context, RecentsAnimationDeviceState deviceState,
+            TaskAnimationManager taskAnimationManager, GestureState gestureState,
             InputMonitorCompat inputMonitorCompat) {
         mContext = context;
         mTaskAnimationManager = taskAnimationManager;
@@ -138,11 +135,6 @@ public class DeviceLockedInputConsumer implements InputConsumer,
     @Override
     public int getType() {
         return TYPE_DEVICE_LOCKED;
-    }
-
-    @Override
-    public int getDisplayId() {
-        return mGestureState.getDisplayId();
     }
 
     @Override

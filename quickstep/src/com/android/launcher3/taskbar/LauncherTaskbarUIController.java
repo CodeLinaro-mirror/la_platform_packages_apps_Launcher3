@@ -467,15 +467,10 @@ public class LauncherTaskbarUIController extends TaskbarUIController {
     }
 
     @Override
-    protected void toggleAllApps(boolean focusSearch) {
-        boolean canToggleHomeAllApps = mLauncher.isResumed()
+    protected boolean canToggleHomeAllApps() {
+        return mLauncher.isResumed()
                 && !mTaskbarLauncherStateController.isInOverviewUi()
                 && !mLauncher.areDesktopTasksVisible();
-        if (canToggleHomeAllApps) {
-            mLauncher.toggleAllApps(focusSearch);
-            return;
-        }
-        super.toggleAllApps(focusSearch);
     }
 
     @Override

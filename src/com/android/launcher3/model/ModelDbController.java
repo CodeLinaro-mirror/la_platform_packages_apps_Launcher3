@@ -80,6 +80,7 @@ import com.android.launcher3.provider.LauncherDbUtils.SQLiteTransaction;
 import com.android.launcher3.provider.RestoreDbTask;
 import com.android.launcher3.util.IOUtils;
 import com.android.launcher3.util.IntArray;
+import com.android.launcher3.util.MainThreadInitializedObject.SandboxContext;
 import com.android.launcher3.util.Partner;
 import com.android.launcher3.widget.LauncherWidgetHolder;
 
@@ -142,11 +143,14 @@ public class ModelDbController {
     }
 
     protected DatabaseHelper createDatabaseHelper(boolean forMigration, String dbFile) {
+        boolean isSandbox = mContext instanceof SandboxContext;
+        String dbName = isSandbox ? null : dbFile;
+
         // Set the flag for empty DB
         Runnable onEmptyDbCreateCallback = forMigration ? () -> { }
-                : () -> LauncherPrefs.get(mContext).putSync(getEmptyDbCreatedKey(dbFile).to(true));
+                : () -> LauncherPrefs.get(mContext).putSync(getEmptyDbCreatedKey(dbName).to(true));
 
-        DatabaseHelper databaseHelper = new DatabaseHelper(mContext, dbFile,
+        DatabaseHelper databaseHelper = new DatabaseHelper(mContext, dbName,
                 this::getSerialNumberForUser, onEmptyDbCreateCallback);
         // Table creation sometimes fails silently, which leads to a crash loop.
         // This way, we will try to create a table every time after crash, so the device
@@ -376,7 +380,8 @@ public class ModelDbController {
                 .filter(dbName -> mContext.getDatabasePath(dbName).exists())
                 .collect(Collectors.toList());
 
-        mOpenHelper = createDatabaseHelper(true, new DeviceGridState(idp).getDbFile());
+        mOpenHelper = (mContext instanceof SandboxContext) ? oldHelper
+                : createDatabaseHelper(true, new DeviceGridState(idp).getDbFile());
         try {
             // This is the current grid we have, given by the mContext
             DeviceGridState srcDeviceState = new DeviceGridState(mContext);
@@ -457,7 +462,8 @@ public class ModelDbController {
         List<String> existingDBs = LauncherFiles.GRID_DB_FILES.stream()
                 .filter(dbName -> mContext.getDatabasePath(dbName).exists())
                 .collect(Collectors.toList());
-        mOpenHelper = createDatabaseHelper(true /* forMigration */, targetDbName);
+        mOpenHelper = (mContext instanceof SandboxContext) ? oldHelper
+                : createDatabaseHelper(true /* forMigration */, targetDbName);
         try {
             // This is the current grid we have, given by the mContext
             DeviceGridState srcDeviceState = new DeviceGridState(mContext);
@@ -757,6 +763,10 @@ public class ModelDbController {
      * string will be "EMPTY_DATABASE_CREATED@minimal.db".
      */
     private ConstantItem<Boolean> getEmptyDbCreatedKey(String dbName) {
+        if (mContext instanceof SandboxContext) {
+            return LauncherPrefs.nonRestorableItem(EMPTY_DATABASE_CREATED,
+                    false /* default value */, EncryptionType.ENCRYPTED);
+        }
         String key = TextUtils.equals(dbName, LauncherFiles.LAUNCHER_DB)
                 ? EMPTY_DATABASE_CREATED : EMPTY_DATABASE_CREATED + "@" + dbName;
         return LauncherPrefs.backedUpItem(key, false /* default value */, EncryptionType.ENCRYPTED);

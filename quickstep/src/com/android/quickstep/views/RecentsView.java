@@ -74,6 +74,7 @@ import static com.android.quickstep.views.OverviewActionsView.HIDDEN_NO_RECENTS;
 import static com.android.quickstep.views.OverviewActionsView.HIDDEN_NO_TASKS;
 import static com.android.quickstep.views.OverviewActionsView.HIDDEN_SPLIT_SELECT_ACTIVE;
 import static com.android.quickstep.views.RecentsViewUtils.DESK_EXPLODE_PROGRESS;
+import static com.android.quickstep.views.TaskView.SPLIT_ALPHA;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
@@ -143,7 +144,6 @@ import com.android.launcher3.BaseActivity.MultiWindowModeChangedListener;
 import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.Flags;
 import com.android.launcher3.Insettable;
-import com.android.launcher3.InvariantDeviceProfile;
 import com.android.launcher3.PagedView;
 import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
@@ -573,8 +573,6 @@ public abstract class RecentsView<
     // Keeps track of the previously known visible tasks for purposes of loading/unloading task data
     private final SparseBooleanArray mHasVisibleTaskData = new SparseBooleanArray();
 
-    private final InvariantDeviceProfile mIdp;
-
     /**
      * Getting views should be done via {@link #getTaskViewFromPool(int)}
      */
@@ -911,7 +909,6 @@ public abstract class RecentsView<
         mFastFlingVelocity = getResources()
                 .getDimensionPixelSize(R.dimen.recents_fast_fling_velocity);
         mModel = RecentsModel.INSTANCE.get(context);
-        mIdp = InvariantDeviceProfile.INSTANCE.get(context);
 
         mClearAllButton = (ClearAllButton) LayoutInflater.from(context)
                 .inflate(R.layout.overview_clear_all_button, this, false);
@@ -1462,7 +1459,8 @@ public abstract class RecentsView<
             anim.addListener(new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationEnd(Animator animation) {
-                    finishRecentsAnimation(false /* toRecents */, null);
+                    finishRecentsAnimation(false /* toRecents */, true /*shouldPip*/,
+                            allAppsAreTranslucent(apps), null);
                 }
             });
         } else {
@@ -1471,6 +1469,18 @@ public abstract class RecentsView<
                     getDepthController(), transitionInfo);
         }
         anim.start();
+    }
+
+    private boolean allAppsAreTranslucent(RemoteAnimationTarget[] apps) {
+        if (apps == null) {
+            return false;
+        }
+        for (int i = apps.length - 1; i >= 0; --i) {
+            if (!apps[i].isTranslucent) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public boolean isTaskViewVisible(TaskView tv) {
@@ -2493,6 +2503,11 @@ public abstract class RecentsView<
         int minDistanceFromScreenStart = Integer.MAX_VALUE;
         int minDistanceFromScreenStartIndex = INVALID_PAGE;
         for (int i = 0; i < getChildCount(); ++i) {
+            // Do not set the destination page to the AddDesktopButton, which has the same page
+            // scrolls as the first [TaskView] and shouldn't be scrolled to.
+            if (getChildAt(i) instanceof AddDesktopButton) {
+                continue;
+            }
             int distanceFromScreenStart = Math.abs(mPageScrolls[i] - scaledScroll);
             if (distanceFromScreenStart < minDistanceFromScreenStart) {
                 minDistanceFromScreenStart = distanceFromScreenStart;
@@ -2999,9 +3014,22 @@ public abstract class RecentsView<
         startIconFadeInOnGestureComplete();
         animateActionsViewIn();
 
-        for (TaskView taskView : getTaskViews()) {
-            if (taskView instanceof DesktopTaskView desktopTaskView) {
-                desktopTaskView.setRemoteTargetHandles(mRemoteTargetHandles);
+        if (mEnableDrawingLiveTile) {
+            for (TaskView taskView : getTaskViews()) {
+                if (taskView instanceof DesktopTaskView desktopTaskView) {
+                    desktopTaskView.setRemoteTargetHandles(mRemoteTargetHandles);
+                }
+            }
+            TaskView runningTaskView = getRunningTaskView();
+            if (showAsGrid() && enableGridOnlyOverview() && runningTaskView != null) {
+                runActionOnRemoteHandles(remoteTargetHandle -> {
+                    TaskViewSimulator taskViewSimulator = remoteTargetHandle.getTaskViewSimulator();
+                    // After settling in Overview, recentsScroll will be used to adjust horizontally
+                    // location and taskGridTranslationX doesn't needs to be applied.
+                    taskViewSimulator.taskGridTranslationX.value = 0;
+                    taskViewSimulator.taskGridTranslationY.value =
+                            runningTaskView.getGridTranslationY();
+                });
             }
         }
 
@@ -3516,19 +3544,6 @@ public abstract class RecentsView<
             mAddDesktopButton.setGridTranslationX(translationX);
         }
 
-        final TaskView runningTask = getRunningTaskView();
-        if (showAsGrid() && enableGridOnlyOverview() && runningTask != null) {
-            runActionOnRemoteHandles(
-                    remoteTargetHandle -> {
-                        remoteTargetHandle.getTaskViewSimulator().taskGridTranslationX.value =
-                                runningTask.getGridTranslationX()
-                                        - runningTask.getNonGridTranslationX();
-                        remoteTargetHandle.getTaskViewSimulator().taskGridTranslationY.value =
-                                runningTask.getGridTranslationY();
-                    }
-            );
-        }
-
         mClearAllButton.setGridTranslationPrimary(
                 clearAllTotalTranslationX - snappedTaskGridTranslationX);
         mClearAllButton.setGridScrollOffset(
@@ -3907,6 +3922,22 @@ public abstract class RecentsView<
                 // Use last task as reference point for scroll diff and snapping calculation as it's
                 // the only invariant point in landscape split screen.
                 snapToLastTask = true;
+            }
+            if (mUtils.getGridTaskCount() == 1 && dismissedTaskView.isGridTask()) {
+                TaskView lastLargeTile = mUtils.getLastLargeTaskView();
+                if (lastLargeTile != null) {
+                    // Calculate the distance to put last large tile back to middle of the screen.
+                    int primaryScroll = getPagedOrientationHandler().getPrimaryScroll(this);
+                    int lastLargeTileScroll = getScrollForPage(indexOfChild(lastLargeTile));
+                    longGridRowWidthDiff = primaryScroll - lastLargeTileScroll;
+
+                    if (!isClearAllHidden) {
+                        // If ClearAllButton is visible, reduce the distance by scroll difference
+                        // between ClearAllButton and the last task.
+                        longGridRowWidthDiff += getLastTaskScroll(/*clearAllScroll=*/0,
+                                getPagedOrientationHandler().getPrimarySize(mClearAllButton));
+                    }
+                }
             }
 
             // If we need to animate the grid to compensate the clear all gap, we split the second
@@ -4746,9 +4777,8 @@ public abstract class RecentsView<
         }
         mClearAllButton.setContentAlpha(mContentAlpha);
 
-        // TODO(b/389209338): Handle the visibility of the `mAddDesktopButton`.
         if (mAddDesktopButton != null) {
-            mAddDesktopButton.setAlpha(mContentAlpha);
+            mAddDesktopButton.setContentAlpha(mContentAlpha);
         }
         int alphaInt = Math.round(alpha * 255);
         mEmptyMessagePaint.setAlpha(alphaInt);
@@ -5326,8 +5356,7 @@ public abstract class RecentsView<
                                 clampToProgress(timings.getDesktopTaskScaleInterpolator(), 0f,
                                         timings.getDesktopFadeSplitAnimationEndOffset()));
                     }
-                    builder.addFloat(taskView.getSplitAlphaProperty(),
-                            MULTI_PROPERTY_VALUE, 1f, 0f,
+                    builder.addFloat(taskView, SPLIT_ALPHA, 1f, 0f,
                             clampToProgress(deskTopFadeInterPolator, 0f,
                                     timings.getDesktopFadeSplitAnimationEndOffset()));
                 }
@@ -6187,9 +6216,7 @@ public abstract class RecentsView<
 
     private int getFirstViewIndex() {
         final View firstView;
-        if (mAddDesktopButton != null) {
-            firstView = mAddDesktopButton;
-        } else if (mShowAsGridLastOnLayout) {
+        if (mShowAsGridLastOnLayout) {
             // For grid Overview, it always start if a large tile (focused task or desktop task) if
             // they exist, otherwise it start with the first task.
             TaskView firstLargeTaskView = mUtils.getFirstLargeTaskView();
@@ -6259,13 +6286,6 @@ public abstract class RecentsView<
             outPageScrolls[clearAllIndex] = clearAllScroll;
         }
 
-        int addDesktopButtonIndex = indexOfChild(mAddDesktopButton);
-        if (addDesktopButtonIndex != -1 && addDesktopButtonIndex < outPageScrolls.length) {
-            outPageScrolls[addDesktopButtonIndex] =
-                    newPageScrolls[addDesktopButtonIndex] + mAddDesktopButton.getScrollAdjustment(
-                            showAsGrid);
-        }
-
         int lastTaskScroll = getLastTaskScroll(clearAllScroll, clearAllWidth);
         getTaskViews().forEachWithIndexInParent((index, taskView) -> {
             float scrollDiff = taskView.getScrollAdjustment(showAsGrid);
@@ -6280,6 +6300,14 @@ public abstract class RecentsView<
                         "getPageScrolls - outPageScrolls[" + index + "]: " + outPageScrolls[index]);
             }
         });
+
+        int addDesktopButtonIndex = indexOfChild(mAddDesktopButton);
+        if (addDesktopButtonIndex >= 0 && addDesktopButtonIndex < outPageScrolls.length) {
+            int firstViewIndex = getFirstViewIndex();
+            if (firstViewIndex >= 0 && firstViewIndex < outPageScrolls.length) {
+                outPageScrolls[addDesktopButtonIndex] = outPageScrolls[firstViewIndex];
+            }
+        }
         if (DEBUG) {
             Log.d(TAG, "getPageScrolls - clearAllScroll: " + clearAllScroll);
         }
@@ -6311,6 +6339,11 @@ public abstract class RecentsView<
 
     public ClearAllButton getClearAllButton() {
         return mClearAllButton;
+    }
+
+    @Nullable
+    public AddDesktopButton getAddDeskButton() {
+        return mAddDesktopButton;
     }
 
     /**

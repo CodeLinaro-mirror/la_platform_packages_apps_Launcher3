@@ -26,9 +26,6 @@ import static com.android.launcher3.model.ModelUtils.currentScreenContentFilter;
 import static com.android.launcher3.util.Executors.MAIN_EXECUTOR;
 import static com.android.launcher3.util.Executors.MODEL_EXECUTOR;
 
-import static java.util.Collections.emptyList;
-
-import android.os.Process;
 import android.os.Trace;
 import android.util.Log;
 import android.util.Pair;
@@ -46,7 +43,6 @@ import com.android.launcher3.model.BgDataModel.Callbacks;
 import com.android.launcher3.model.BgDataModel.FixedContainerItems;
 import com.android.launcher3.model.data.AppInfo;
 import com.android.launcher3.model.data.ItemInfo;
-import com.android.launcher3.model.data.PackageItemInfo;
 import com.android.launcher3.util.ComponentKey;
 import com.android.launcher3.util.IntArray;
 import com.android.launcher3.util.IntSet;
@@ -166,17 +162,10 @@ public class BaseLauncherBinder {
         if (!WIDGETS_ENABLED) {
             return;
         }
-        Map<PackageItemInfo, List<WidgetItem>>
-                widgetsByPackageItem = mBgDataModel.widgetsModel.getWidgetsByPackageItemForPicker();
         List<WidgetsListBaseEntry> widgets = new WidgetsListBaseEntriesBuilder(mApp.getContext())
-                .build(widgetsByPackageItem);
-        Predicate<WidgetItem> filter = mBgDataModel.widgetsModel.getDefaultWidgetsFilter();
-        List<WidgetsListBaseEntry> defaultWidgets =
-                filter != null ? new WidgetsListBaseEntriesBuilder(
-                        mApp.getContext()).build(widgetsByPackageItem,
-                        mBgDataModel.widgetsModel.getDefaultWidgetsFilter()) : emptyList();
+                .build(mBgDataModel.widgetsModel.getWidgetsByPackageItemForPicker());
 
-        executeCallbacksTask(c -> c.bindAllWidgets(widgets, defaultWidgets), mUiExecutor);
+        executeCallbacksTask(c -> c.bindAllWidgets(widgets), mUiExecutor);
     }
 
     /**
@@ -352,14 +341,8 @@ public class BaseLauncherBinder {
                 onCompleteSignal.executeAllAndDestroy();
             }
 
-            executeCallbacksTask(
-                    c -> {
-                        if (!enableWorkspaceInflation()) {
-                            MODEL_EXECUTOR.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
-                        }
-                        c.onInitialBindComplete(currentScreenIds, pendingTasks, onCompleteSignal,
-                                workspaceItemCount, isBindSync);
-                    }, mUiExecutor);
+            executeCallbacksTask(c -> c.onInitialBindComplete(currentScreenIds, pendingTasks,
+                    onCompleteSignal, workspaceItemCount, isBindSync), mUiExecutor);
         }
 
         private void setupPendingBind(
@@ -369,12 +352,8 @@ public class BaseLauncherBinder {
             executeCallbacksTask(c -> c.bindStringCache(cacheClone), pendingExecutor);
 
             executeCallbacksTask(c -> c.finishBindingItems(currentScreenIds), pendingExecutor);
-            pendingExecutor.execute(
-                    () -> {
-                        MODEL_EXECUTOR.setThreadPriority(Process.THREAD_PRIORITY_DEFAULT);
-                        ItemInstallQueue.INSTANCE.get(mApp.getContext())
-                                .resumeModelPush(FLAG_LOADER_RUNNING);
-                    });
+            pendingExecutor.execute(() -> ItemInstallQueue.INSTANCE.get(mApp.getContext())
+                    .resumeModelPush(FLAG_LOADER_RUNNING));
         }
 
         /**

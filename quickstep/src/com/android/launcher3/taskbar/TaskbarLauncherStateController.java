@@ -191,6 +191,8 @@ public class TaskbarLauncherStateController {
 
     private boolean mIsQsbInline;
 
+    private RecentsAnimationCallbacks mRecentsAnimationCallbacks;
+
     private final DeviceProfile.OnDeviceProfileChangeListener mOnDeviceProfileChangeListener =
             new DeviceProfile.OnDeviceProfileChangeListener() {
                 @Override
@@ -223,9 +225,13 @@ public class TaskbarLauncherStateController {
                     updateStateForFlag(FLAG_LAUNCHER_IN_STATE_TRANSITION, true);
                     if (!mShouldDelayLauncherStateAnim) {
                         if (toState == LauncherState.NORMAL) {
-                            applyState(QuickstepTransitionManager.getTaskbarToHomeDuration(
+                            boolean isPinnedTaskbarAndNotInDesktopMode =
                                     DisplayController.isPinnedTaskbar(
-                                            mControllers.taskbarActivityContext)));
+                                            mControllers.taskbarActivityContext)
+                                            && !DisplayController.isInDesktopMode(
+                                            mControllers.taskbarActivityContext);
+                            applyState(QuickstepTransitionManager.getTaskbarToHomeDuration(
+                                    isPinnedTaskbarAndNotInDesktopMode));
                         } else {
                             applyState();
                         }
@@ -291,6 +297,11 @@ public class TaskbarLauncherStateController {
         mIsDestroyed = true;
         mCanSyncViews = false;
 
+        if (mRecentsAnimationCallbacks != null) {
+            mRecentsAnimationCallbacks.removeListener(mTaskBarRecentsAnimationListener);
+            mRecentsAnimationCallbacks = null;
+        }
+
         mIconAlignment.finishAnimation();
 
         mLauncher.getHotseat().setIconsAlpha(1f, ALPHA_CHANNEL_TASKBAR_ALIGNMENT);
@@ -311,6 +322,7 @@ public class TaskbarLauncherStateController {
         // If going to overview, stash the task bar
         // If going home, align the icons to hotseat
         AnimatorSet animatorSet = new AnimatorSet();
+        mRecentsAnimationCallbacks = callbacks;
 
         // Update stashed flags first to ensure goingToUnstashedLauncherState() returns correctly.
         TaskbarStashController stashController = mControllers.taskbarStashController;
@@ -680,8 +692,11 @@ public class TaskbarLauncherStateController {
         } else if (mIconAlignment.isAnimatingToValue(toAlignment)
                 || mIconAlignment.isSettledOnValue(toAlignment)) {
             // Already at desired value, but make sure we run the callback at the end.
-            animatorSet.addListener(AnimatorListeners.forEndCallback(
-                    this::onIconAlignmentRatioChanged));
+            animatorSet.addListener(AnimatorListeners.forEndCallback(() -> {
+                if (!mIconAlignment.isAnimating()) {
+                    onIconAlignmentRatioChanged();
+                }
+            }));
         } else {
             mIconAlignment.cancelAnimation();
             ObjectAnimator iconAlignAnim = mIconAlignment

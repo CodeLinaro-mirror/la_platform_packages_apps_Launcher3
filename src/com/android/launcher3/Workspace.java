@@ -125,6 +125,7 @@ import com.android.launcher3.widget.dragndrop.AppWidgetHostViewDragListener;
 import com.android.launcher3.widget.util.WidgetSizes;
 import com.android.systemui.plugins.shared.LauncherOverlayManager.LauncherOverlay;
 import com.android.systemui.plugins.shared.LauncherOverlayManager.LauncherOverlayCallbacks;
+import com.android.qcomfeatureconfig.QcomLowRamConfig;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -550,7 +551,9 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         setupLayoutTransition();
 
         // Set the wallpaper dimensions when Launcher starts up
-        setWallpaperDimension();
+        if (!QcomLowRamConfig.TARGET_QCOM_IOT_LOW_RAM) {
+            setWallpaperDimension();
+        }
     }
 
     private void setupLayoutTransition() {

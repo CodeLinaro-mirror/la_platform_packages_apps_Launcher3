@@ -552,8 +552,8 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
 
         // Set the wallpaper dimensions when Launcher starts up
         if (!QcomLowRamConfig.TARGET_QCOM_IOT_LOW_RAM) {
-	    setWallpaperDimension();
-	}
+            setWallpaperDimension();
+        }
     }
 
     private void setupLayoutTransition() {

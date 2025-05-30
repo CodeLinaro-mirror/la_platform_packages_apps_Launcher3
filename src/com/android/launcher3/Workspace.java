@@ -52,7 +52,6 @@ import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Message;
 import android.os.Parcelable;
-import android.os.SystemProperties;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.SparseArray;
@@ -126,6 +125,7 @@ import com.android.launcher3.widget.dragndrop.AppWidgetHostViewDragListener;
 import com.android.launcher3.widget.util.WidgetSizes;
 import com.android.systemui.plugins.shared.LauncherOverlayManager.LauncherOverlay;
 import com.android.systemui.plugins.shared.LauncherOverlayManager.LauncherOverlayCallbacks;
+import com.android.qcomfeatureconfig.QcomLowRamConfig;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -289,8 +289,6 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     private final WorkspaceStateTransitionAnimation mStateTransitionAnimation;
 
     private final StatsLogManager mStatsLogManager;
-
-    static final boolean enableMemOptimize = SystemProperties.get("ro.product.memopt.enable").equals("1");
 
     /**
      * Used to inflate the Workspace from XML.
@@ -553,9 +551,9 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         setupLayoutTransition();
 
         // Set the wallpaper dimensions when Launcher starts up
-        if (!enableMemOptimize){
+        if (!QcomLowRamConfig.TARGET_QCOM_IOT_LOW_RAM) {
 	    setWallpaperDimension();
-        }
+	}
     }
 
     private void setupLayoutTransition() {

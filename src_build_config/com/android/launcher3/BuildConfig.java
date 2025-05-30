@@ -15,6 +15,7 @@
  */
 
 package com.android.launcher3;
+import com.android.qcomfeatureconfig.QcomLowRamConfig;
 
 public final class BuildConfig {
     public static final String APPLICATION_ID = "com.android.launcher3";
@@ -24,7 +25,7 @@ public final class BuildConfig {
      * Flag to state if the QSB is on the first screen and placed on the top,
      * this can be overwritten in other launchers with a different value, if needed.
      */
-    public static final boolean QSB_ON_FIRST_SCREEN = true;
+    public static final boolean QSB_ON_FIRST_SCREEN = !QcomLowRamConfig.TARGET_QCOM_IOT_LOW_RAM;
 
     /**
      * Flag to control various developer centric features

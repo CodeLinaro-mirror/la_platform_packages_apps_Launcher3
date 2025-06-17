@@ -58,6 +58,7 @@ import android.animation.ObjectAnimator;
 import android.annotation.DrawableRes;
 import android.annotation.IdRes;
 import android.annotation.LayoutRes;
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.ActivityInfo.Config;
 import android.content.res.ColorStateList;
@@ -477,8 +478,9 @@ public class NavbarButtonsViewController implements TaskbarControllers.LoggableT
         if (!mContext.isPhoneMode()) {
             mPropertyHolders.add(new StatePropertyHolder(
                     mBackButton, flags -> mContext.isUserSetupComplete()
-                            && ((flags & FLAG_ONLY_BACK_FOR_BOUNCER_VISIBLE) != 0
-                                    || (flags & FLAG_KEYGUARD_VISIBLE) != 0),
+                        && ((flags & FLAG_ONLY_BACK_FOR_BOUNCER_VISIBLE) != 0
+                            || (flags & FLAG_KEYGUARD_VISIBLE) != 0)
+                        && (!shouldShowHomeButtonInLockscreen(flags)),
                     VIEW_TRANSLATE_X, navButtonSize * (isRtl ? -2 : 2), 0));
         }
 
@@ -488,19 +490,8 @@ public class NavbarButtonsViewController implements TaskbarControllers.LoggableT
         mHomeButtonAlpha = new MultiValueAlpha(mHomeButton, NUM_ALPHA_CHANNELS);
         mHomeButtonAlpha.setUpdateVisibility(true);
         mPropertyHolders.add(
-                new StatePropertyHolder(mHomeButtonAlpha.get(
-                        ALPHA_INDEX_KEYGUARD_OR_DISABLE),
-                        flags -> {
-                            /* when the keyguard is visible hide home button. Anytime we are
-                             * occluded we want to show the home button for apps over keyguard.
-                             * however we don't want to show when not occluded/visible.
-                             * (visible false || occluded true) && disable false && not gnav
-                             */
-                            return ((flags & FLAG_KEYGUARD_VISIBLE) == 0
-                                    || (flags & FLAG_KEYGUARD_OCCLUDED) != 0)
-                                    && (flags & FLAG_DISABLE_HOME) == 0
-                                    && !mContext.isGestureNav();
-                        }));
+                new StatePropertyHolder(mHomeButtonAlpha.get(ALPHA_INDEX_KEYGUARD_OR_DISABLE),
+                        this::shouldShowHomeButtonInLockscreen));
 
         // Recents button
         mRecentsButton = addButton(R.drawable.ic_sysbar_recent, BUTTON_RECENTS,
@@ -531,6 +522,21 @@ public class NavbarButtonsViewController implements TaskbarControllers.LoggableT
         mSpace.setOnClickListener(view -> navButtonController.onButtonClick(BUTTON_SPACE, view));
         mSpace.setOnLongClickListener(view ->
                 navButtonController.onButtonLongClick(BUTTON_SPACE, view));
+    }
+
+    /**
+     * Method to determine whether to show the home button in lockscreen
+     *
+     * When the keyguard is visible hide home button. Anytime we are
+     * occluded we want to show the home button for apps over keyguard.
+     * however we don't want to show when not occluded/visible.
+     * (visible false || occluded true) && disable false && not gnav
+     */
+    private boolean shouldShowHomeButtonInLockscreen(int flags) {
+        return ((flags & FLAG_KEYGUARD_VISIBLE) == 0
+                || (flags & FLAG_KEYGUARD_OCCLUDED) != 0)
+                && (flags & FLAG_DISABLE_HOME) == 0
+                && !mContext.isGestureNav();
     }
 
     private void parseSystemUiFlags(@SystemUiStateFlags long sysUiStateFlags) {
@@ -880,6 +886,7 @@ public class NavbarButtonsViewController implements TaskbarControllers.LoggableT
                 R.layout.taskbar_nav_button);
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     private ImageView addButton(@DrawableRes int drawableId, @TaskbarButton int buttonType,
             ViewGroup parent, TaskbarNavButtonController navButtonController, @IdRes int id,
             @LayoutRes int layoutId) {
@@ -899,6 +906,12 @@ public class NavbarButtonsViewController implements TaskbarControllers.LoggableT
                     navButtonController.onButtonClick(buttonType, view));
             buttonView.setOnLongClickListener(view ->
                     navButtonController.onButtonLongClick(buttonType, view));
+            buttonView.setOnTouchListener((v, event) -> {
+                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    buttonView.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                }
+                return false;
+            });
         }
         return buttonView;
     }
@@ -939,6 +952,7 @@ public class NavbarButtonsViewController implements TaskbarControllers.LoggableT
                 hasSentDownEvent.set(false);
                 mHandler.postDelayed(longPressTimeout, PREDICTIVE_BACK_TIMEOUT_MS);
                 rect.set(0, 0, v.getWidth(), v.getHeight());
+                buttonView.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
             }
             boolean isCancelled = motionEventAction == MotionEvent.ACTION_CANCEL
                     || (!rect.contains(event.getX(), event.getY())
@@ -960,7 +974,6 @@ public class NavbarButtonsViewController implements TaskbarControllers.LoggableT
             navButtonController.sendBackKeyEvent(KeyEvent.ACTION_UP, isCancelled);
             if (motionEventAction == MotionEvent.ACTION_UP && !isCancelled) {
                 buttonView.performClick();
-                buttonView.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
             }
             return false;
         });

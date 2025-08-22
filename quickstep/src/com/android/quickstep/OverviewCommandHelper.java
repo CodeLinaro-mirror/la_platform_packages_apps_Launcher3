@@ -24,6 +24,7 @@ import android.graphics.PointF;
 import android.os.Build;
 import android.os.SystemClock;
 import android.os.Trace;
+import android.view.KeyEvent;
 
 import androidx.annotation.BinderThread;
 import androidx.annotation.Nullable;
@@ -59,14 +60,17 @@ public class OverviewCommandHelper {
     private final TouchInteractionService mService;
     private final OverviewComponentObserver mOverviewComponentObserver;
     private final TaskAnimationManager mTaskAnimationManager;
+    private final SystemUiProxy mSystemUiProxy;
     private final ArrayList<CommandInfo> mPendingCommands = new ArrayList<>();
 
     public OverviewCommandHelper(TouchInteractionService service,
             OverviewComponentObserver observer,
-            TaskAnimationManager taskAnimationManager) {
+            TaskAnimationManager taskAnimationManager,
+            SystemUiProxy systemUiProxy) {
         mService = service;
         mOverviewComponentObserver = observer;
         mTaskAnimationManager = taskAnimationManager;
+        mSystemUiProxy = systemUiProxy;
     }
 
     /**
@@ -160,7 +164,7 @@ public class OverviewCommandHelper {
                 return true;
             }
             if (cmd.type == TYPE_HOME) {
-                mService.startActivity(mOverviewComponentObserver.getHomeIntent());
+                mSystemUiProxy.onKeyEvent(KeyEvent.KEYCODE_HOME);
                 LauncherSplitScreenListener.INSTANCE.getNoCreate().notifySwipingToHome();
                 return true;
             }

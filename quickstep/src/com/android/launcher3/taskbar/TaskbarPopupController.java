@@ -33,7 +33,6 @@ import android.util.Pair;
 import android.util.SparseArray;
 import android.view.MotionEvent;
 import android.view.View;
-import android.window.DesktopExperienceFlags;
 
 import androidx.annotation.AnyThread;
 import androidx.annotation.NonNull;
@@ -70,7 +69,6 @@ import com.android.quickstep.SystemUiProxy;
 import com.android.quickstep.util.LogUtils;
 import com.android.quickstep.util.SingleTask;
 import com.android.systemui.shared.recents.model.Task;
-import com.android.wm.shell.shared.bubbles.BubbleAnythingFlagHelper;
 import com.android.wm.shell.shared.desktopmode.DesktopModeStatus;
 
 import java.io.PrintWriter;
@@ -135,7 +133,8 @@ public class TaskbarPopupController implements TaskbarControllers.LoggableTaskba
     }
 
     // Create a Stream of all applicable system shortcuts
-    private Stream<SystemShortcut.Factory<BaseTaskbarContext>> getSystemShortcuts() {
+    @VisibleForTesting
+    Stream<SystemShortcut.Factory<BaseTaskbarContext>> getSystemShortcuts() {
         // append split options to APP_INFO shortcut if not in Desktop Windowing mode, the order
         // here will reflect in the popup
         ArrayList<SystemShortcut.Factory<BaseTaskbarContext>> shortcuts = new ArrayList<>();
@@ -145,7 +144,7 @@ public class TaskbarPopupController implements TaskbarControllers.LoggableTaskba
                 .shouldShowDesktopTasksInTaskbar(mContext.getDisplayId())) {
             shortcuts.addAll(mControllers.uiController.getSplitMenuOptions().toList());
         }
-        if (BubbleAnythingFlagHelper.enableCreateAnyBubble()) {
+        if (mControllers.taskbarActivityContext.areAppBubblesSupported()) {
             shortcuts.add(BUBBLE);
         }
 
@@ -529,8 +528,7 @@ public class TaskbarPopupController implements TaskbarControllers.LoggableTaskba
     }
 
     protected static boolean canPinAppWithContextMenu(TaskbarActivityContext context) {
-        return DesktopExperienceFlags.ENABLE_PINNING_APP_WITH_CONTEXT_MENU.isTrue()
-                && context.isTaskbarShowingDesktopTasks();
+        return context.isTaskbarShowingDesktopTasks();
     }
 
     /**

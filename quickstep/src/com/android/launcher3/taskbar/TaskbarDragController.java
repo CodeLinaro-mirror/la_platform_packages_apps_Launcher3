@@ -19,7 +19,6 @@ import static com.android.app.animation.Interpolators.FAST_OUT_SLOW_IN;
 import static com.android.launcher3.AbstractFloatingView.TYPE_TASKBAR_ALL_APPS;
 import static com.android.launcher3.Flags.enableSystemDrag;
 import static com.android.launcher3.Flags.enableTaskbarDragAndDrop;
-import static com.android.launcher3.Flags.refactorTaskbarUiState;
 import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS;
 import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS_PREDICTION;
 import static com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_DEEP_SHORTCUT;
@@ -47,6 +46,7 @@ import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.Trace;
 import android.os.UserHandle;
 import android.util.Log;
 import android.util.Pair;
@@ -93,7 +93,6 @@ import com.android.quickstep.util.LogUtils;
 import com.android.quickstep.util.MultiValueUpdateListener;
 import com.android.quickstep.util.SingleTask;
 import com.android.systemui.shared.recents.model.Task;
-import com.android.wm.shell.shared.bubbles.BubbleAnythingFlagHelper;
 import com.android.wm.shell.shared.draganddrop.DragAndDropConstants;
 
 import java.io.PrintWriter;
@@ -107,6 +106,9 @@ import java.util.function.Predicate;
 public class TaskbarDragController extends DragController implements
         TaskbarControllers.LoggableTaskbarController {
     private static final String TAG = "TaskbarDragController";
+
+    private static final int INTERNAL_DRAG_COOKIE = 447444838;
+    private static final int EXTERNAL_DRAG_COOKIE = 444050202;
 
     private static final boolean DEBUG_DRAG_SHADOW_SURFACE = false;
     private static final int ANIM_DURATION_RETURN_ICON_TO_TASKBAR = 300;
@@ -123,6 +125,7 @@ public class TaskbarDragController extends DragController implements
     private int mRegistrationY;
 
     private boolean mIsSystemDragInProgress;
+    private boolean mIsDragExternal = false;
     private boolean mTaskbarIsViableTargetForSystemDrag;
     private boolean mIsDropHandledByDropTarget;
 
@@ -204,7 +207,7 @@ public class TaskbarDragController extends DragController implements
     private void updateIsDragging() {
         mIsTaskbarDragging = TaskbarDragController.super.isDragging()
                 || mIsSystemDragInProgress;
-        if (refactorTaskbarUiState() && mTaskbarUiState != null) {
+        if (mTaskbarUiState != null) {
             mTaskbarUiState.setIsTaskbarDragging(mIsTaskbarDragging);
         }
     }
@@ -241,6 +244,7 @@ public class TaskbarDragController extends DragController implements
             @Nullable DragPreviewProvider dragPreviewProvider,
             @Nullable Point iconShift,
             DragOptions dragOptions) {
+        Trace.beginAsyncSection("TaskbarDragController.dragStartToDragEnd", INTERNAL_DRAG_COOKIE);
         mActivity.onDragStart();
         btv.post(() -> {
             DragView dragView = startInternalDrag(btv, dragPreviewProvider, dragOptions);
@@ -527,7 +531,8 @@ public class TaskbarDragController extends DragController implements
                     intent.putExtra(Intent.EXTRA_PACKAGE_NAME, item.getIntent().getPackage());
                     intent.putExtra(Intent.EXTRA_SHORTCUT_ID, deepShortcutId);
                     ShortcutInfo shortcutInfo = ((WorkspaceItemInfo) item).getDeepShortcutInfo();
-                    if (BubbleAnythingFlagHelper.enableCreateAnyBubble() && shortcutInfo != null) {
+                    if (mControllers.taskbarActivityContext.areAppBubblesSupported()
+                            && shortcutInfo != null) {
                         intent.putExtra(DragAndDropConstants.EXTRA_SHORTCUT_INFO, shortcutInfo);
                     }
                 } else if (item.itemType == ITEM_TYPE_SEARCH_ACTION) {
@@ -765,6 +770,10 @@ public class TaskbarDragController extends DragController implements
         }
         super.endDrag();
         updateIsDragging();
+        Trace.endAsyncSection("TaskbarDragController.dragStartToDragEnd",
+                mIsDragExternal ? EXTERNAL_DRAG_COOKIE : INTERNAL_DRAG_COOKIE);
+        mIsDragExternal = false;
+        mIsDropHandledByDropTarget = false;
     }
 
     @Override
@@ -971,6 +980,9 @@ public class TaskbarDragController extends DragController implements
                     if (isDragging()) {
                         return true;
                     }
+                    mIsDragExternal = true;
+                    Trace.beginAsyncSection("TaskbarDragController.dragStartToDragEnd",
+                            EXTERNAL_DRAG_COOKIE);
                     Point downPos = new Point((int) event.getX(), (int) event.getY());
                     DragOptions options = new DragOptions();
                     options.simulatedDndStartPoint = downPos;

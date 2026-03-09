@@ -52,8 +52,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -63,6 +61,8 @@ import com.android.launcher3.popup.ui.PopupMenuItemDimens.popupMenuItemHeight
 import com.android.launcher3.popup.ui.PopupMenuItemDimens.popupMenuItemHorizontalPadding
 import com.android.launcher3.popup.ui.PopupMenuItemDimens.popupMenuItemVerticalPadding
 import com.android.launcher3.popup.ui.PopupMenuItemDimens.popupMenuItemWidth
+import com.android.launcher3.util.compose.testTag
+import com.android.launcher3.util.compose.testTagContainer
 import kotlin.math.max
 
 /**
@@ -87,14 +87,14 @@ import kotlin.math.max
 fun ComposePopup(
     viewModel: PopupViewModel,
     onClickListener: (PopupClickEvent) -> Unit,
-    onAddIconClick: (ItemInfoWithIcon) -> Unit,
+    onAddIconClick: ((ItemInfoWithIcon) -> Unit)?,
     onDeepShortcutLongPress: (ItemInfoWithIcon, Offset) -> Unit,
     onMaxHeightMeasured: ((Int) -> Unit)?,
 ) {
     val state = viewModel.state
 
     Box(
-        modifier = Modifier.bottomAlignAndAllowOverflow(),
+        modifier = Modifier.bottomAlignAndAllowOverflow().testTagContainer(),
         contentAlignment = Alignment.BottomCenter,
     ) {
         ComposePopupContent(
@@ -147,7 +147,7 @@ private fun ComposePopupContent(
     viewModel: PopupViewModel,
     targetState: PopupUiState,
     onClickListener: (PopupClickEvent) -> Unit,
-    onAddIconClick: (ItemInfoWithIcon) -> Unit,
+    onAddIconClick: ((ItemInfoWithIcon) -> Unit)?,
     onDeepShortcutLongPress: (ItemInfoWithIcon, Offset) -> Unit,
     onMaxHeightMeasured: ((Int) -> Unit)?,
 ) {
@@ -155,54 +155,56 @@ private fun ComposePopupContent(
 
     // Calculate the maximum possible height of the popup based on the current state and style.
     // This value is remembered and only recalculated when 'state' or 'density' changes.
-    val maxHeight = remember {
-        with(density) {
-            val spacerHeight = ComposePopupDimens.popupContentSpacerHeight.toPx()
+    val maxHeight =
+        remember(targetState, density) {
+            with(density) {
+                val spacerHeight = ComposePopupDimens.popupContentSpacerHeight.toPx()
 
-            if (targetState.mainSegmentsStyle == MainSegmentsStyle.ACCORDION) {
-                val expandPopupMenuButtonHeight = popupMenuItemHeight.toPx()
-                val systemShortcutsHeight: Float =
-                    if (targetState.compactSystemShortcuts.isEmpty()) {
+                if (targetState.mainSegmentsStyle == MainSegmentsStyle.ACCORDION) {
+                    val expandPopupMenuButtonHeight = popupMenuItemHeight.toPx()
+                    val systemShortcutsHeight: Float =
+                        if (targetState.compactSystemShortcuts.isEmpty()) {
+                            targetState.standardSystemShortcuts.size * popupMenuItemHeight.toPx()
+                        } else {
+                            ((targetState.standardSystemShortcuts.size + 1) *
+                                popupMenuItemHeight.toPx()) +
+                                ComposePopupDimens.systemShortcutsDividerHeight.toPx()
+                        }
+
+                    val deepShortcutsHeight =
+                        (targetState.deepShortcuts.size * popupMenuItemHeight.toPx())
+
+                    val heightDeepExpanded =
+                        expandPopupMenuButtonHeight + deepShortcutsHeight + spacerHeight
+                    val heightSystemExpanded =
+                        expandPopupMenuButtonHeight + systemShortcutsHeight + spacerHeight
+                    max(heightDeepExpanded, heightSystemExpanded).toInt()
+                } else { // MainSegmentsStyle.LIST
+                    var systemShortcutsHeight = 0f
+                    if (targetState.compactSystemShortcuts.isNotEmpty()) {
+                        systemShortcutsHeight += popupMenuItemHeight.toPx()
+                    }
+                    if (
+                        targetState.compactSystemShortcuts.isNotEmpty() &&
+                            targetState.standardSystemShortcuts.isNotEmpty()
+                    ) {
+                        systemShortcutsHeight += ComposePopupDimens.popupContentSpacerHeight.toPx()
+                    }
+                    systemShortcutsHeight +=
                         targetState.standardSystemShortcuts.size * popupMenuItemHeight.toPx()
-                    } else {
-                        ((targetState.standardSystemShortcuts.size + 1) *
-                            popupMenuItemHeight.toPx()) +
+
+                    val deepShortcutsHeight =
+                        targetState.deepShortcuts.size * popupMenuItemHeight.toPx()
+
+                    if (deepShortcutsHeight > 0) {
+                        systemShortcutsHeight +=
                             ComposePopupDimens.systemShortcutsDividerHeight.toPx()
                     }
 
-                val deepShortcutsHeight =
-                    (targetState.deepShortcuts.size * popupMenuItemHeight.toPx())
-
-                val heightDeepExpanded =
-                    expandPopupMenuButtonHeight + deepShortcutsHeight + spacerHeight
-                val heightSystemExpanded =
-                    expandPopupMenuButtonHeight + systemShortcutsHeight + spacerHeight
-                max(heightDeepExpanded, heightSystemExpanded).toInt()
-            } else { // MainSegmentsStyle.LIST
-                var systemShortcutsHeight = 0f
-                if (targetState.compactSystemShortcuts.isNotEmpty()) {
-                    systemShortcutsHeight += popupMenuItemHeight.toPx()
+                    (systemShortcutsHeight + deepShortcutsHeight + spacerHeight).toInt()
                 }
-                if (
-                    targetState.compactSystemShortcuts.isNotEmpty() &&
-                        targetState.standardSystemShortcuts.isNotEmpty()
-                ) {
-                    systemShortcutsHeight += ComposePopupDimens.popupContentSpacerHeight.toPx()
-                }
-                systemShortcutsHeight +=
-                    targetState.standardSystemShortcuts.size * popupMenuItemHeight.toPx()
-
-                val deepShortcutsHeight =
-                    targetState.deepShortcuts.size * popupMenuItemHeight.toPx()
-
-                if (deepShortcutsHeight > 0) {
-                    systemShortcutsHeight += ComposePopupDimens.systemShortcutsDividerHeight.toPx()
-                }
-
-                (systemShortcutsHeight + deepShortcutsHeight + spacerHeight).toInt()
             }
         }
-    }
 
     val lastReportedMaxHeight = remember { mutableIntStateOf(-1) }
 
@@ -363,7 +365,7 @@ fun ExpandableHybridPopup(
     isDeepShortcutsExpanded: Boolean,
     onToggle: (ExpandedSection) -> Unit,
     onClickListener: (PopupClickEvent) -> Unit,
-    onAddButtonClick: (ItemInfoWithIcon) -> Unit,
+    onAddButtonClick: ((ItemInfoWithIcon) -> Unit)?,
     onDeepShortcutLongPress: (ItemInfoWithIcon, Offset) -> Unit,
 ) {
     val systemTransitionState = remember { MutableTransitionState(isSystemShortcutsExpanded) }
@@ -438,7 +440,7 @@ private fun SystemShortcutsSection(
     standardShortcuts: List<PopupItem>,
     onClick: (PopupClickEvent) -> Unit,
 ) {
-    Column(modifier = Modifier.semantics { contentDescription = "system_shortcuts_container" }) {
+    Column {
         if (compactShortcuts.isNotEmpty()) {
             Row(
                 modifier =
@@ -503,10 +505,10 @@ private fun SystemShortcutsSection(
 private fun DeepShortcutsContent(
     deepShortcuts: List<ItemInfoWithIcon?>,
     onClick: (PopupClickEvent) -> Unit,
-    onAddButtonClick: (ItemInfoWithIcon) -> Unit,
+    onAddButtonClick: ((ItemInfoWithIcon) -> Unit)?,
     onDeepShortcutLongPress: (ItemInfoWithIcon, Offset) -> Unit,
 ) {
-    Column(modifier = Modifier.semantics { contentDescription = "deep_shortcuts_container" }) {
+    Column(modifier = Modifier.testTag("deep_shortcuts_container")) {
         deepShortcuts.forEach { shortcut ->
             DeepShortcutMenuItem(
                 shortcut = shortcut,

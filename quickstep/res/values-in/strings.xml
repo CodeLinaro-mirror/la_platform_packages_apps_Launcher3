@@ -22,6 +22,7 @@
     <string name="recent_task_option_pin" msgid="7929860679018978258">"Sematkan"</string>
     <string name="recent_task_option_freeform" msgid="48863056265284071">"Format bebas"</string>
     <string name="recent_task_option_desktop" msgid="8280879717125435668">"Desktop"</string>
+    <string name="recent_split_task_option_desktop" msgid="7272418191932478598">"Desktop untuk %1$s"</string>
     <string name="recent_task_option_external_display" msgid="4533840664313389484">"Pindahkan ke layar eksternal"</string>
     <string name="recent_task_option_remove_task" msgid="803559928027541555">"Hapus"</string>
     <string name="recent_task_desktop" msgid="8081113562549637334">"Desktop"</string>
@@ -55,7 +56,7 @@
     <string name="back_gesture_intro_subtitle" msgid="7912576483031802797">"Untuk kembali ke layar yang sebelumnya dibuka, geser dari tepi kiri atau kanan ke tengah layar."</string>
     <string name="back_gesture_tutorial_title" msgid="1944737946101059789">"Kembali"</string>
     <string name="back_gesture_tutorial_subtitle" msgid="6639993416000920142">"Geser dari tepi kiri atau kanan ke tengah layar"</string>
-    <string name="home_gesture_feedback_swipe_too_far_from_edge" msgid="4816365433160895458">"Pastikan Anda menggeser ke atas dari tepi bawah layar"</string>
+    <string name="home_gesture_feedback_swipe_too_far_from_edge" msgid="4816365433160895458">"Pastikan Anda menggeser layar dari ujung bawah ke atas"</string>
     <string name="home_gesture_feedback_overview_detected" msgid="5177627157303895077">"Pastikan Anda tidak berhenti sebelum melepaskan sentuhan"</string>
     <string name="home_gesture_feedback_wrong_swipe_direction" msgid="8328465201424027148">"Geser lurus ke atas"</string>
     <string name="home_gesture_feedback_complete_with_follow_up" msgid="8766981412895888417">"Anda telah menyelesaikan gestur buka layar utama. Berikutnya, pelajari cara melakukan gestur kembali."</string>
@@ -65,7 +66,7 @@
     <string name="home_gesture_tutorial_title" msgid="3126834347496917376">"Buka layar utama"</string>
     <string name="home_gesture_tutorial_subtitle" msgid="7245995490408668778">"Geser ke atas dari bagian bawah layar"</string>
     <string name="home_gesture_tutorial_success" msgid="1736295017642244751">"Bagus!"</string>
-    <string name="overview_gesture_feedback_swipe_too_far_from_edge" msgid="6402349235265407385">"Pastikan Anda menggeser ke atas dari tepi bawah layar"</string>
+    <string name="overview_gesture_feedback_swipe_too_far_from_edge" msgid="6402349235265407385">"Pastikan Anda menggeser layar dari ujung bawah ke atas"</string>
     <string name="overview_gesture_feedback_home_detected" msgid="663432226180397138">"Coba tahan jendela lebih lama sebelum melepasnya"</string>
     <string name="overview_gesture_feedback_wrong_swipe_direction" msgid="1191055451018584958">"Pastikan Anda menggeser lurus ke atas, lalu berhenti sejenak"</string>
     <string name="overview_gesture_feedback_complete_with_follow_up" msgid="3544611727467765026">"Anda telah mempelajari cara menggunakan gestur. Untuk menonaktifkan gestur, buka Setelan."</string>
@@ -140,6 +141,7 @@
     <string name="taskbar_button_notifications" msgid="7471740351507357318">"Notifikasi"</string>
     <string name="taskbar_button_quick_settings" msgid="227662894293189391">"Setelan Cepat"</string>
     <string name="taskbar_a11y_title" msgid="6432169809852243110">"Taskbar"</string>
+    <string name="bubble_bar_a11y_title" msgid="7743340801055597168">"Bilah balon"</string>
     <string name="taskbar_phone_a11y_title" msgid="4933360237131229395">"Menu navigasi"</string>
     <string name="always_show_taskbar" msgid="3608801276107751229">"Selalu tampilkan Taskbar"</string>
     <string name="change_navigation_mode" msgid="9088393078736808968">"Ubah mode navigasi"</string>
@@ -168,7 +170,7 @@
     <string name="search_gesture_feature_title" msgid="1294044108313175306">"Lingkari untuk Menelusuri"</string>
     <string name="header_app_icon_description" msgid="2184625881433608027">"Ikon aplikasi"</string>
     <string name="header_default_app_title" msgid="8308052350689531566">"Judul aplikasi"</string>
-    <string name="header_close_icon_description" msgid="5400033616675911319">"Tombol tutup"</string>
+    <string name="header_close_icon_description" msgid="9216416109255777643">"Tutup"</string>
     <string name="nudge_a11y_title" msgid="2126529303123687912">"Saran tindak lanjut"</string>
     <string name="nudge_a11y_close" msgid="4513937143817625570">"Tutup"</string>
     <string name="nudge_a11y_image" msgid="117910310515857252">"Gambar saran tindak lanjut"</string>

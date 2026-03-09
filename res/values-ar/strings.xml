@@ -104,8 +104,10 @@
     <string name="dismiss_prediction_label" msgid="3357562989568808658">"عدم اقتراح التطبيق"</string>
     <string name="pin_prediction" msgid="4196423321649756498">"تثبيت التطبيق المتوقّع"</string>
     <string name="bubble" msgid="3072951361014076670">"فقاعة"</string>
-    <string name="enable_app_lock" msgid="9190316880781005775">"قفل التطبيق"</string>
-    <string name="disable_app_lock" msgid="9071912028491244470">"إزالة القفل"</string>
+    <!-- no translation found for enable_app_lock (5606772593969266718) -->
+    <skip />
+    <!-- no translation found for disable_app_lock (2252606435270354961) -->
+    <skip />
     <string name="widget_settings" msgid="5280157748464495511">"الإعدادات"</string>
     <string name="add_to_taskbar" msgid="1442306985857150792">"الإضافة إلى \"شريط التطبيقات\""</string>
     <string name="remove_from_taskbar" msgid="5817026706030273018">"الإزالة من \"شريط التطبيقات\""</string>
@@ -258,6 +260,5 @@
     <string name="arch_shape_title" msgid="2213843822192871318">"قوس"</string>
     <string name="create_new_folder_button_text" msgid="4037052463794735069">"مجلد جديد"</string>
     <string name="default_new_folder_name" msgid="8821062664729412079">"مجلد جديد"</string>
-    <!-- no translation found for something_went_wrong (1492883246069060632) -->
-    <skip />
+    <string name="something_went_wrong" msgid="1492883246069060632">"حدث خطأ"</string>
 </resources>

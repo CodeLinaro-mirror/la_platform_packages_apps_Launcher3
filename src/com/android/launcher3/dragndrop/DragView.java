@@ -45,7 +45,6 @@ import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Pair;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -59,7 +58,6 @@ import androidx.dynamicanimation.animation.SpringAnimation;
 import androidx.dynamicanimation.animation.SpringForce;
 
 import com.android.app.animation.Interpolators;
-import com.android.launcher3.Flags;
 import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
 import com.android.launcher3.folder.ClippedFolderIconLayoutRule;
@@ -278,11 +276,10 @@ public class DragView extends FrameLayout {
             ThemeManager themeManager = ThemeManager.INSTANCE.get(getContext());
             int w = mWidth;
             int h = mHeight;
-            Pair<AdaptiveIconDrawable, Drawable> fullDrawable = Utilities.getFullDrawable(
-                    mActivity, info, w, h,
-                    themeManager.isIconThemeEnabled());
+            var fullDrawable = mActivity.getActivityComponent().getIconLoader().getFullDrawable(
+                    info, w, h, themeManager.isIconThemeEnabled());
             if (fullDrawable != null) {
-                AdaptiveIconDrawable adaptiveIcon = fullDrawable.first;
+                AdaptiveIconDrawable adaptiveIcon = fullDrawable.icon;
                 int blurMargin = (int) getContext().getResources()
                         .getDimension(R.dimen.blur_size_medium_outline) / 2;
 
@@ -290,7 +287,7 @@ public class DragView extends FrameLayout {
                 bounds.inset(blurMargin, blurMargin);
                 // Badge is applied after icon normalization so the bounds for badge should not
                 // be scaled down due to icon normalization.
-                mBadge = fullDrawable.second;
+                mBadge = fullDrawable.badge;
                 FastBitmapDrawable.setBadgeBounds(mBadge, bounds);
                 Utilities.scaleRectAboutCenter(bounds, IconNormalizer.ICON_VISIBLE_AREA_FACTOR);
 
@@ -725,8 +722,7 @@ public class DragView extends FrameLayout {
                 // Widgets uses a listener to remove views.
                 // When widgets are dropped from another window, we don't want to remove the
                 // dragView on resume of launcher.
-                if (Flags.enableWidgetPickerRefactor()
-                        && d.mItemType != ITEM_TYPE_APPWIDGET
+                if (d.mItemType != ITEM_TYPE_APPWIDGET
                         && d.mItemType != ITEM_TYPE_DEEP_SHORTCUT) {
                     dragLayer.removeView(child);
                 }

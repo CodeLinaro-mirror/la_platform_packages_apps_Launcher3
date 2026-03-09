@@ -20,18 +20,20 @@ import static android.content.Intent.EXTRA_COMPONENT_NAME;
 import static android.content.Intent.EXTRA_USER;
 
 import static com.android.app.animation.Interpolators.ACCELERATE;
+import static com.android.app.animation.Interpolators.DECELERATE;
 import static com.android.launcher3.GestureNavContract.EXTRA_ENABLE_GESTURE_CONTRACT;
 import static com.android.launcher3.GestureNavContract.EXTRA_GESTURE_CONTRACT;
 import static com.android.launcher3.GestureNavContract.EXTRA_ICON_POSITION;
 import static com.android.launcher3.GestureNavContract.EXTRA_ICON_SURFACE;
+import static com.android.launcher3.GestureNavContract.EXTRA_LAUNCH_COOKIE;
 import static com.android.launcher3.GestureNavContract.EXTRA_ON_FINISH_CALLBACK;
 import static com.android.launcher3.GestureNavContract.EXTRA_REMOTE_CALLBACK;
 import static com.android.launcher3.anim.AnimatorListeners.forEndCallback;
 import static com.android.quickstep.OverviewComponentObserver.startHomeIntentSafely;
 
 import android.animation.ObjectAnimator;
-import android.app.ActivityManager.RunningTaskInfo;
 import android.app.ActivityOptions;
+import android.app.TaskInfo;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Matrix;
@@ -51,12 +53,12 @@ import android.view.RemoteAnimationTarget;
 import android.view.Surface;
 import android.view.SurfaceControl;
 import android.view.SurfaceControl.Transaction;
+import android.view.animation.Interpolator;
 import android.window.TransitionInfo;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.Utilities;
 import com.android.launcher3.anim.AnimatedFloat;
 import com.android.launcher3.anim.AnimatorPlaybackController;
@@ -65,6 +67,8 @@ import com.android.launcher3.anim.SpringAnimationBuilder;
 import com.android.launcher3.display.DisplayController;
 import com.android.launcher3.states.StateAnimationConfig;
 import com.android.launcher3.util.MSDLPlayerWrapper;
+import com.android.launcher3.util.ObjectWrapper;
+import com.android.launcher3.util.StableViewInfo;
 import com.android.quickstep.fallback.FallbackActivityRecentsView;
 import com.android.quickstep.fallback.RecentsState;
 import com.android.quickstep.util.ActiveGestureLog;
@@ -73,6 +77,7 @@ import com.android.quickstep.util.SurfaceTransaction.SurfaceProperties;
 import com.android.quickstep.util.TransformParams;
 import com.android.quickstep.util.TransformParams.BuilderProxy;
 import com.android.quickstep.views.TaskView;
+import com.android.systemui.shared.recents.model.Task;
 import com.android.systemui.shared.recents.model.Task.TaskKey;
 import com.android.systemui.shared.system.InputConsumerController;
 
@@ -89,6 +94,10 @@ public class FallbackSwipeHandler extends
 
     private static final String TAG = "FallbackSwipeHandler";
 
+    private static final float HOME_SWIPE_UP_SCALE = 0.9f;
+    private static final float HOME_SWIPE_UP_ALPHA = 0.75f;
+    private static final Interpolator HOME_SWIPE_UP_INTERPOLATOR = DECELERATE;
+
     /**
      * Message used for receiving gesture nav contract information. We use a static messenger to
      * avoid leaking too make binders in case the receiving launcher does not handle the contract
@@ -100,7 +109,6 @@ public class FallbackSwipeHandler extends
     private final boolean mRunningOverHome;
 
     private final Matrix mTmpMatrix = new Matrix();
-    private float mMaxLauncherScale = 1;
 
     private boolean mAppCanEnterPip;
 
@@ -121,26 +129,45 @@ public class FallbackSwipeHandler extends
         }
     }
 
-    @Override
-    protected void initTransitionEndpoints(DeviceProfile dp) {
-        super.initTransitionEndpoints(dp);
-        if (mRunningOverHome) {
-            // Full screen scale should be independent of remote target handle
-            mMaxLauncherScale = 1 / mRemoteTargetHandles[0].getTaskViewSimulator()
-                    .getFullScreenScale();
+    private void updateHomeActivityTransformDuringSwipeUp(
+            SurfaceProperties builder, RemoteAnimationTarget app, TransformParams params) {
+        if (mActiveAnimationFactory != null) {
+            return;
         }
-    }
-
-    private void updateHomeActivityTransformDuringSwipeUp(SurfaceProperties builder,
-            RemoteAnimationTarget app, TransformParams params) {
+        // The currentShift is already interpolated by the magnetic swipe detach effect
         float currentShift = getCurrentShiftValue();
-        setHomeScaleAndAlpha(builder, app, currentShift,
-                Utilities.boundToRange(1 - currentShift, 0, 1));
+        setHomeScaleAndAlpha(
+                builder,
+                app,
+                currentShift,
+                mRunningOverHome
+                        ? Utilities.mapBoundToRange(
+                                currentShift,
+                                /* lowerBound= */ 0f,
+                                /* upperBound= */ mDragLengthFactor,
+                                /* toMin= */ 1f,
+                                /* toMax= */ HOME_SWIPE_UP_ALPHA,
+                                /* interpolator= */ HOME_SWIPE_UP_INTERPOLATOR)
+                        : 0f);
     }
 
-    private void setHomeScaleAndAlpha(SurfaceProperties builder,
-            RemoteAnimationTarget app, float verticalShift, float alpha) {
-        float scale = Utilities.mapRange(verticalShift, 1, mMaxLauncherScale);
+    private void setHomeScaleAndAlpha(
+            SurfaceProperties builder,
+            RemoteAnimationTarget app,
+            float verticalShift,
+            float alpha) {
+        if (app.windowConfiguration.getActivityType() != ACTIVITY_TYPE_HOME) {
+            return;
+        }
+        float scale = mRunningOverHome
+                ? Utilities.mapBoundToRange(
+                        verticalShift,
+                        /* lowerBound= */ 0f,
+                        /* upperBound= */ mDragLengthFactor,
+                        /* toMin= */ 1f,
+                        /* toMax= */ HOME_SWIPE_UP_SCALE,
+                        /* interpolator= */ HOME_SWIPE_UP_INTERPOLATOR)
+                : 1f;
         mTmpMatrix.setScale(scale, scale,
                 app.localBounds.exactCenterX(), app.localBounds.exactCenterY());
         builder.setMatrix(mTmpMatrix).setAlpha(alpha);
@@ -159,19 +186,44 @@ public class FallbackSwipeHandler extends
         if (appCanEnterPip) {
             return new FallbackPipToHomeAnimationFactory();
         }
-        mActiveAnimationFactory = new FallbackHomeAnimationFactory(duration);
-        startHomeIntent(mActiveAnimationFactory, runningTaskTarget, "FallbackSwipeHandler-home");
+        mActiveAnimationFactory = new FallbackHomeAnimationFactory(duration, targetTaskView);
+        startHomeIntent(
+                mActiveAnimationFactory,
+                runningTaskTarget,
+                targetTaskView,
+                targetTaskView != null
+                        ? null
+                        : launchCookies.stream()
+                                .filter(launchCookie ->
+                                        ObjectWrapper.<StableViewInfo>unwrap(launchCookie) != null)
+                                .findFirst()
+                                .orElse(null),
+                "FallbackSwipeHandler-home");
         return mActiveAnimationFactory;
     }
 
     private void startHomeIntent(
             @Nullable FallbackHomeAnimationFactory gestureContractAnimationFactory,
             @Nullable RemoteAnimationTarget runningTaskTarget,
+            @Nullable TaskView targetTaskView,
+            @Nullable IBinder launchCookie,
             @NonNull String reason) {
         ActivityOptions options = ActivityOptions.makeCustomAnimation(mContext, 0, 0);
         Intent intent = new Intent(mGestureState.getHomeIntent());
-        if (gestureContractAnimationFactory != null && runningTaskTarget != null) {
-            gestureContractAnimationFactory.addGestureContract(intent, runningTaskTarget.taskInfo);
+        if (gestureContractAnimationFactory != null) {
+            TaskKey taskKey = null;
+            if (targetTaskView != null) {
+                Task firstTask = targetTaskView.getFirstTask();
+
+                taskKey = firstTask == null ? null : firstTask.key;
+            } else if (runningTaskTarget != null) {
+                TaskInfo taskInfo = runningTaskTarget.taskInfo;
+
+                taskKey = taskInfo == null ? null : new TaskKey(taskInfo);
+            }
+            if (taskKey != null) {
+                gestureContractAnimationFactory.addGestureContract(intent, taskKey, launchCookie);
+            }
         }
         startHomeIntentSafely(mContext, intent, options.toBundle(), reason);
     }
@@ -196,8 +248,12 @@ public class FallbackSwipeHandler extends
             // the PiP task appearing.
             recentsCallback = () -> {
                 callback.run();
-                startHomeIntent(null /* gestureContractAnimationFactory */,
-                        null /* runningTaskTarget */, "FallbackSwipeHandler-resumeLauncher");
+                startHomeIntent(
+                        /* gestureContractAnimationFactory= */ null,
+                        /* runningTaskTarget= */ null,
+                        /* targetTaskView= */ null,
+                        /* launchCookie= */ null,
+                        /* reason= */ "FallbackSwipeHandler-resumeLauncher");
             };
         } else {
             recentsCallback = callback;
@@ -265,10 +321,12 @@ public class FallbackSwipeHandler extends
         private Message mOnFinishCallback;
 
         private final long mDuration;
+        @Nullable private final TaskView mTargetTaskView;
 
         private RectFSpringAnim mSpringAnim;
-        FallbackHomeAnimationFactory(long duration) {
+        FallbackHomeAnimationFactory(long duration, @Nullable TaskView targetTaskView) {
             mDuration = duration;
+            mTargetTaskView = targetTaskView;
 
             if (mRunningOverHome) {
                 float currentShift = getCurrentShiftValue();
@@ -291,6 +349,12 @@ public class FallbackSwipeHandler extends
                     remoteTargetHandle.getTransformParams().setBaseBuilderProxy(
                             FallbackHomeAnimationFactory.this
                                     ::updateRecentsActivityTransformDuringHomeAnim));
+        }
+
+        @Nullable
+        @Override
+        public TaskView getTargetTaskView() {
+            return mTargetTaskView;
         }
 
         @NonNull
@@ -415,26 +479,29 @@ public class FallbackSwipeHandler extends
             }
         }
 
-        private void addGestureContract(Intent intent, RunningTaskInfo runningTaskInfo) {
-            if (mRunningOverHome || runningTaskInfo == null) {
+        private void addGestureContract(
+                @NonNull Intent intent,
+                @NonNull TaskKey key,
+                @Nullable IBinder launchCookie) {
+            if (mRunningOverHome) {
                 return;
             }
-
-            TaskKey key = new TaskKey(runningTaskInfo);
-            if (key.getComponent() != null) {
-                if (sMessageReceiver == null) {
-                    sMessageReceiver = new StaticMessageReceiver();
-                }
-
-                Bundle gestureNavContract = new Bundle();
-                gestureNavContract.putBoolean(
-                        EXTRA_ENABLE_GESTURE_CONTRACT, mRemoteTargetHandles.length <= 1);
-                gestureNavContract.putParcelable(EXTRA_COMPONENT_NAME, key.getComponent());
-                gestureNavContract.putParcelable(EXTRA_USER, UserHandle.of(key.userId));
-                gestureNavContract.putParcelable(
-                        EXTRA_REMOTE_CALLBACK, sMessageReceiver.newCallback(this));
-                intent.putExtra(EXTRA_GESTURE_CONTRACT, gestureNavContract);
+            if (key.getComponent() == null) {
+                return;
             }
+            if (sMessageReceiver == null) {
+                sMessageReceiver = new StaticMessageReceiver();
+            }
+            Bundle gestureNavContract = new Bundle();
+
+            gestureNavContract.putBoolean(
+                    EXTRA_ENABLE_GESTURE_CONTRACT, mRemoteTargetHandles.length <= 1);
+            gestureNavContract.putBinder(EXTRA_LAUNCH_COOKIE, launchCookie);
+            gestureNavContract.putParcelable(EXTRA_COMPONENT_NAME, key.getComponent());
+            gestureNavContract.putParcelable(EXTRA_USER, UserHandle.of(key.userId));
+            gestureNavContract.putParcelable(
+                    EXTRA_REMOTE_CALLBACK, sMessageReceiver.newCallback(this));
+            intent.putExtra(EXTRA_GESTURE_CONTRACT, gestureNavContract);
         }
     }
 

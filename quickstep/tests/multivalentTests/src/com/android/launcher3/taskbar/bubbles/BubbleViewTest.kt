@@ -29,16 +29,16 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.android.launcher3.R
 import com.android.launcher3.icons.BitmapInfo
 import com.android.launcher3.taskbar.bubbles.model.BubbleIcon
+import com.android.users.UserType
 import com.android.wm.shell.shared.bubbles.BubbleBarLocation
 import com.android.wm.shell.shared.bubbles.BubbleInfo
-import com.android.wm.shell.shared.bubbles.UserType
 import com.google.common.truth.Truth.assertThat
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mockito.Mockito.mock
-import org.mockito.Mockito.verify
-import org.mockito.Mockito.`when`
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 
 @SmallTest
 @RunWith(AndroidJUnit4::class)
@@ -48,14 +48,14 @@ class BubbleViewTest {
     private lateinit var bubbleView: BubbleView
     private lateinit var overflowView: BubbleView
     private lateinit var bubble: BubbleBarBubble
-    private val mockController = mock(BubbleView.Controller::class.java)
+    private val mockController = mock<BubbleView.Controller>()
 
     @Before
     fun setUp() {
         setupBubbleViews()
         bubbleView.setController(mockController)
         overflowView.setController(mockController)
-        `when`(mockController.bubbleBarLocation).thenReturn(BubbleBarLocation.RIGHT)
+        whenever(mockController.bubbleBarLocation).thenReturn(BubbleBarLocation.RIGHT)
     }
 
     @Test
@@ -98,7 +98,8 @@ class BubbleViewTest {
 
         // Verify that it has the expand action and not the collapse action
         assertThat(actions).contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_EXPAND)
-        assertThat(actions).doesNotContain(AccessibilityNodeInfo.AccessibilityAction.ACTION_COLLAPSE)
+        assertThat(actions)
+            .doesNotContain(AccessibilityNodeInfo.AccessibilityAction.ACTION_COLLAPSE)
     }
 
     @Test
@@ -122,7 +123,7 @@ class BubbleViewTest {
     @Test
     fun onInitializeAccessibilityNodeInfo_forBubbleOnRight_hasMoveLeftAction() {
         // Set bubble bar location to the right
-        `when`(mockController.bubbleBarLocation).thenReturn(BubbleBarLocation.RIGHT)
+        whenever(mockController.bubbleBarLocation).thenReturn(BubbleBarLocation.RIGHT)
         val info = AccessibilityNodeInfo()
 
         // Check the accessibility node info
@@ -137,7 +138,7 @@ class BubbleViewTest {
     @Test
     fun onInitializeAccessibilityNodeInfo_forBubbleOnLeft_hasMoveRightAction() {
         // Set bubble bar location to the left
-        `when`(mockController.bubbleBarLocation).thenReturn(BubbleBarLocation.LEFT)
+        whenever(mockController.bubbleBarLocation).thenReturn(BubbleBarLocation.LEFT)
         val info = AccessibilityNodeInfo()
 
         // Check the accessibility node info
@@ -172,7 +173,7 @@ class BubbleViewTest {
         verify(mockController)
             .updateBubbleBarLocation(
                 BubbleBarLocation.LEFT,
-                BubbleBarLocation.UpdateSource.A11Y_ACTION_BUBBLE
+                BubbleBarLocation.UpdateSource.A11Y_ACTION_BUBBLE,
             )
         // Verify that the action is marked as handled
         assertThat(handled).isTrue()
@@ -187,7 +188,7 @@ class BubbleViewTest {
         verify(mockController)
             .updateBubbleBarLocation(
                 BubbleBarLocation.RIGHT,
-                BubbleBarLocation.UpdateSource.A11Y_ACTION_BUBBLE
+                BubbleBarLocation.UpdateSource.A11Y_ACTION_BUBBLE,
             )
         // Verify that the action is marked as handled
         assertThat(handled).isTrue()

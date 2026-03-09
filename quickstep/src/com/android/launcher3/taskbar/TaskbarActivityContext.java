@@ -31,7 +31,6 @@ import static androidx.annotation.VisibleForTesting.PACKAGE_PRIVATE;
 import static com.android.app.animation.Interpolators.LINEAR;
 import static com.android.launcher3.AbstractFloatingView.TYPE_ON_BOARD_POPUP;
 import static com.android.launcher3.AbstractFloatingView.TYPE_TASKBAR_OVERLAY_PROXY;
-import static com.android.launcher3.Flags.refactorTaskbarUiState;
 import static com.android.launcher3.Utilities.calculateTextHeight;
 import static com.android.launcher3.Utilities.isRunningInTestHarness;
 import static com.android.launcher3.config.FeatureFlags.enableTaskbarPinning;
@@ -48,6 +47,7 @@ import static com.android.launcher3.util.Executors.getTaskbarUiThread;
 import static com.android.quickstep.RecentsFilterState.EMPTY_FILTER;
 import static com.android.quickstep.util.AnimUtils.completeRunnableListCallback;
 import static com.android.quickstep.util.ExternalDisplaysKt.isExternalDisplay;
+import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_DUAL_SHADE_ENABLED;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_NOTIFICATION_PANEL_VISIBLE;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_VOICE_INTERACTION_WINDOW_SHOWING;
 import static com.android.window.flags.Flags.enableDesktopFirstSplitscreenRefocusBugfix;
@@ -203,6 +203,8 @@ import com.android.systemui.shared.system.QuickStepContract;
 import com.android.systemui.shared.system.QuickStepContract.SystemUiStateFlags;
 import com.android.systemui.unfold.updates.RotationChangeProvider;
 import com.android.systemui.unfold.util.ScopedUnfoldTransitionProgressProvider;
+import com.android.wm.shell.shared.bubbles.BubbleFeatureConfig;
+import com.android.wm.shell.shared.bubbles.BubbleFeatureConfigImpl;
 import com.android.wm.shell.shared.desktopmode.DesktopModeTransitionSource;
 import com.android.wm.shell.shared.desktopmode.DesktopState;
 import com.android.wm.shell.shared.desktopmode.DesktopTaskToFrontReason;
@@ -316,6 +318,8 @@ public class TaskbarActivityContext extends BaseTaskbarContext {
     private int mFolderCount = 0;
     private int mVisiblePopupCount = 0;
 
+    private BubbleFeatureConfig mBubbleFeatureConfig;
+
     public TaskbarActivityContext(int displayId, Context windowContext,
             @Nullable Context navigationBarPanelContext, DeviceProfile launcherDp,
             TaskbarNavButtonController buttonController,
@@ -336,6 +340,7 @@ public class TaskbarActivityContext extends BaseTaskbarContext {
         SettingsCache settingsCache = SettingsCache.INSTANCE.get(this);
         mIsUserSetupComplete = settingsCache.getValue(URI_USER_SETUP_COMPLETE);
         mIsNavBarKidsMode = settingsCache.getValue(URI_NAV_BAR_KIDS_MODE);
+        mBubbleFeatureConfig = new BubbleFeatureConfigImpl(mWindowContext);
 
         applyDeviceProfile(launcherDp);
         mTaskbarSpecsEvaluator = new TaskbarSpecsEvaluator(
@@ -401,7 +406,7 @@ public class TaskbarActivityContext extends BaseTaskbarContext {
                     new BubbleDragController(this, mWindowContext, mDragLayer, mTaskbarUiState),
                     new BubbleDismissController(this, mDragLayer),
                     bubbleBarSwipeController,
-                    new DragToBubbleController(mWindowContext, bubbleBarContainer),
+                    new DragToBubbleController(mWindowContext, bubbleBarContainer, this),
                     new BubbleCreator(this)
             ));
         }
@@ -473,7 +478,11 @@ public class TaskbarActivityContext extends BaseTaskbarContext {
 
     @Override
     public boolean isTransientTaskbar() {
-        return mIsTransient && isPrimaryDisplay() && !isPhoneMode();
+        return isTransienTaskbarForDeviceProfile(mDeviceProfile);
+    }
+
+    private boolean isTransienTaskbarForDeviceProfile(DeviceProfile deviceProfile) {
+        return mIsTransient && isPrimaryDisplay() && !isDeviceProfileForPhoneMode(deviceProfile);
     }
 
     @Override
@@ -515,6 +524,11 @@ public class TaskbarActivityContext extends BaseTaskbarContext {
         return DisplayController.INSTANCE.get(this).getInfo().currentSize.y;
     }
 
+    public boolean isDesktopFormFactor() {
+        return mWindowContext.getResources().getBoolean(
+                R.bool.desktop_form_factor);
+    }
+
     /**
      * Used to confirm we are on AL device.
      */
@@ -530,14 +544,13 @@ public class TaskbarActivityContext extends BaseTaskbarContext {
         Consumer<DeviceProfile> overrideProvider =
                 deviceProfile -> TaskbarDeviceProfileFactory.INSTANCE
                         .createDeviceProfile(
-                                deviceProfile, this
+                                deviceProfile, this,
+                                isTransienTaskbarForDeviceProfile(deviceProfile)
                         );
         mDeviceProfile = originDeviceProfile.toBuilder()
                 .withDimensionsOverride(overrideProvider).build();
-        if (refactorTaskbarUiState()) {
-            mTaskbarUiState.setDeviceProfile(mDeviceProfile);
-            resetResourceValueInTaskbarUiState();
-        }
+        mTaskbarUiState.setDeviceProfile(mDeviceProfile);
+        resetResourceValueInTaskbarUiState();
 
         if (isTransientTaskbar()) {
             mTransientTaskbarProfile = mDeviceProfile.getTaskbarProfile();
@@ -570,6 +583,19 @@ public class TaskbarActivityContext extends BaseTaskbarContext {
     public void bubbleBarVisibilityChanged(boolean isVisible) {
         mControllers.uiController.adjustHotseatForBubbleBar(isVisible);
         mControllers.taskbarViewController.adjustTaskbarForBubbleBar();
+    }
+
+    /** Whether app bubbles are supported on this device. */
+    public boolean areAppBubblesSupported() {
+        return mBubbleFeatureConfig.areAppBubblesSupported();
+    }
+
+    /**
+     * Sets an override for {@link #mBubbleFeatureConfig} for testing.
+     */
+    @VisibleForTesting
+    public void overrideBubbleFeatureConfigForTests(BubbleFeatureConfig featureConfig) {
+        mBubbleFeatureConfig = featureConfig;
     }
 
     /**
@@ -643,8 +669,12 @@ public class TaskbarActivityContext extends BaseTaskbarContext {
      * single window for taskbar and navbar.
      */
     public boolean isPhoneMode() {
-        return mDeviceProfile.getDeviceProperties().isPhone()
-                && !mDeviceProfile.getDeviceProperties().getTaskbarConfiguration()
+        return isDeviceProfileForPhoneMode(mDeviceProfile);
+    }
+
+    private boolean isDeviceProfileForPhoneMode(DeviceProfile deviceProfile) {
+        return deviceProfile.getDeviceProperties().isPhone()
+                && !deviceProfile.getDeviceProperties().getTaskbarConfiguration()
                 .isTaskbarPresent();
     }
 
@@ -746,7 +776,11 @@ public class TaskbarActivityContext extends BaseTaskbarContext {
             mControllers.taskbarEduTooltipController.hide();
             mControllers.taskbarEduTooltipController.maybeShowFeaturesEdu();
         }
-        mControllers.taskbarStashController.updateAndAnimateTransientTaskbar(false);
+        if (!isInDesktopMode()) {
+            mControllers.taskbarStashController.updateAndAnimateTransientTaskbar(false);
+        } else {
+            mControllers.taskbarStashController.updateAndAnimatePinnedTaskbar(false);
+        }
     }
 
     @Override
@@ -791,8 +825,10 @@ public class TaskbarActivityContext extends BaseTaskbarContext {
      */
     public WindowManager.LayoutParams createDefaultWindowLayoutParams(int type, String title) {
         int windowFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
-        if (!isTransientTaskbar()) {
+        if (!isTransientTaskbar() && !isTaskbarShowingDesktopTasks()) {
             // Allow apps to receive swipe events from non-transient taskbar (e.g. 3 button nav).
+            // Desktop taskbar should not allow other apps to receive touch events so that
+            // drag-and-drop gestures on taskbar icons are not interrupted.
             windowFlags |= WindowManager.LayoutParams.FLAG_SLIPPERY;
         }
         boolean watchOutside = isTransientTaskbar() || isThreeButtonNav();
@@ -888,9 +924,6 @@ public class TaskbarActivityContext extends BaseTaskbarContext {
 
     /** Should be called after init, config changed or DeviceProfile change. */
     private void resetResourceValueInTaskbarUiState() {
-        if (!refactorTaskbarUiState()) {
-            return;
-        }
         final Resources res = getResources();
         mTaskbarUiState.setTaskbarUnstashAreaSizePx(
                 res.getDimensionPixelSize(R.dimen.taskbar_unstash_input_area));
@@ -1212,8 +1245,7 @@ public class TaskbarActivityContext extends BaseTaskbarContext {
             boolean fromInit) {
         mControllers.navbarButtonsViewController.updateStateForSysuiFlags(systemUiStateFlags,
                 fromInit);
-        boolean isShadeVisible = (systemUiStateFlags & SYSUI_STATE_NOTIFICATION_PANEL_VISIBLE) != 0;
-        onNotificationShadeExpandChanged(isShadeVisible, fromInit || isPhoneMode());
+        onNotificationShadeExpandChanged(systemUiStateFlags, fromInit || isPhoneMode());
         mControllers.taskbarViewController.setRecentsButtonDisabled(
                 mControllers.navbarButtonsViewController.isRecentsDisabled()
                         || isNavBarKidsModeActive());
@@ -1226,6 +1258,7 @@ public class TaskbarActivityContext extends BaseTaskbarContext {
                 systemUiStateFlags, fromInit || !isUserSetupComplete());
         mControllers.taskbarScrimViewController.updateStateForSysuiFlags(systemUiStateFlags,
                 fromInit);
+        mControllers.taskbarEduTooltipController.updateStateForSysuiFlags(systemUiStateFlags);
         mControllers.navButtonController.updateSysuiFlags(systemUiStateFlags);
         mControllers.taskbarForceVisibleImmersiveController.updateSysuiFlags(systemUiStateFlags);
         mControllers.voiceInteractionWindowController.setIsVoiceInteractionWindowVisible(
@@ -1242,13 +1275,22 @@ public class TaskbarActivityContext extends BaseTaskbarContext {
     /**
      * Hides the taskbar icons and background when the notification shade is expanded.
      */
-    private void onNotificationShadeExpandChanged(boolean isExpanded, boolean skipAnim) {
+    private void onNotificationShadeExpandChanged(long systemUiStateFlags,
+            boolean skipAnim) {
+        boolean isExpanded = (systemUiStateFlags & SYSUI_STATE_NOTIFICATION_PANEL_VISIBLE) != 0;
+        boolean isDualShadeEnabled = (systemUiStateFlags & SYSUI_STATE_DUAL_SHADE_ENABLED) != 0;
         boolean isExpandedUpdated = isExpanded != mIsNotificationShadeExpanded;
         mIsNotificationShadeExpanded = isExpanded;
         // Close all floating views within the Taskbar window to make sure nothing is shown over
         // the notification shade.
         if (isExpanded) {
             AbstractFloatingView.closeAllOpenViewsExcept(this, TYPE_TASKBAR_OVERLAY_PROXY);
+        }
+
+        // Avoid hiding the taskbar when shade is shown with dual shade enabled on desktop form
+        // factor.
+        if (isDualShadeEnabled && isDesktopFormFactor()) {
+            return;
         }
 
         float alpha = isExpanded ? 0 : 1;

@@ -30,6 +30,7 @@ import static android.view.MotionEvent.AXIS_GESTURE_SWIPE_FINGER_COUNT;
 import static android.view.RoundedCorner.POSITION_BOTTOM_LEFT;
 import static android.view.Surface.ROTATION_90;
 
+import static com.android.launcher3.Flags.enableTaskbarUiThread;
 import static com.android.launcher3.tapl.Folder.FOLDER_CONTENT_RES_ID;
 import static com.android.launcher3.tapl.TestHelpers.getOverviewPackageName;
 import static com.android.launcher3.testing.shared.TestProtocol.NORMAL_STATE_ORDINAL;
@@ -1447,7 +1448,11 @@ public final class LauncherInstrumentation {
                 // CLose floating views before going back to home.
                 swipeUpToCloseFloatingView();
 
-                if (hasLauncherObject(WORKSPACE_RES_ID)) {
+                if (hasLauncherObject(WORKSPACE_RES_ID)
+                        && !(isRecentsWindowEnabled() && hasSystemLauncherObject(OVERVIEW_RES_ID))
+                        && !enableTaskbarUiThread()) {
+                    // The workspace is visible on the accessibility hierarchy under the recents
+                    // window
                     log(action = "already at home");
                 } else {
                     action = "swiping up to home";
@@ -3035,6 +3040,12 @@ public final class LauncherInstrumentation {
         return getTestInfo(TestProtocol.REQUEST_TASKBAR_UNSTASHED_INPUT_AREA).getInt(
                 TestProtocol.TEST_INFO_RESPONSE_FIELD);
     }
+
+    /** Mark tool tip of Overview action buttons as seen. */
+    public void markOverviewSelectTipSeen() {
+        getTestInfo(TestProtocol.REQUEST_MARK_OVERVIEW_SELECT_TIP_SEEN);
+    }
+
 
     /**
      * Waits for the provided condition to be true, otherwise fails with the provided message

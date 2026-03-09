@@ -26,6 +26,7 @@ import android.os.Process
 import android.os.UserHandle
 import android.text.TextUtils
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import androidx.annotation.WorkerThread
 import com.android.launcher3.ConstantItem
 import com.android.launcher3.DefaultLayoutParser
@@ -80,7 +81,7 @@ internal constructor(
             // Initialize the restore task before opening the DB
             val restoreTask = RestoreDbTask.createRestoreTask(context)
             val dbFile = prefs.get(LauncherPrefs.DB_FILE).ifEmpty { idp.dbFile }
-            openHelper = createDatabaseHelper(false, /* forMigration */ dbFile)
+            openHelper = createDatabaseHelper(forMigration = false, dbFile)
             restoreTask.accept(this)
         }
     }
@@ -124,7 +125,7 @@ internal constructor(
     @WorkerThread
     fun insert(initialValues: ContentValues?): Int {
         createDbIfNotExists()
-        return openHelper.dbInsertAndCheck(openHelper.writableDatabase, TABLE_NAME, initialValues)
+        return openHelper.insertAndCheck(openHelper.writableDatabase, initialValues)
     }
 
     /** Refer [SQLiteDatabase.delete] */
@@ -142,6 +143,16 @@ internal constructor(
     fun clearEmptyDbFlag() {
         createDbIfNotExists()
         clearFlagEmptyDbCreated()
+    }
+
+    /**
+     * Updates the generated item ID counter for test, so that next item addition doesn't conflict
+     * with preloaded data
+     */
+    @VisibleForTesting
+    fun updateMaxIdForTest(itemId: Int) {
+        createDbIfNotExists()
+        openHelper.updateMaxId(itemId)
     }
 
     /** Generates an id to be used for new item in the favorites table */
@@ -249,7 +260,7 @@ internal constructor(
                         isAfterRestore,
                     )
             ) {
-                openHelper = createDatabaseHelper(true, DeviceGridState(idp).dbFile)
+                openHelper = createDatabaseHelper(forMigration = true, destDeviceState.dbFile)
                 gridSizeMigrationLogic.migrateGrid(
                     srcDeviceState,
                     destDeviceState,

@@ -11,13 +11,14 @@ import android.graphics.drawable.Drawable;
 import android.os.Parcel;
 import android.os.UserHandle;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.InvariantDeviceProfile;
 import com.android.launcher3.LauncherAppState;
-import com.android.launcher3.icons.cache.BaseIconCache;
 import com.android.launcher3.icons.cache.CachedObject;
+import com.android.launcher3.icons.cache.IconLoadRequest;
 import com.android.launcher3.model.data.LauncherAppWidgetInfo;
 
 /**
@@ -116,34 +117,34 @@ public class LauncherAppWidgetProviderInfo extends AppWidgetProviderInfo impleme
                 continue;
             }
 
-            cellSize = dp.getWorkspaceIconProfile().getCellSize();
-            Rect widgetPadding = dp.getWorkspaceIconProfile().getWidgetPadding();
+            cellSize = dp.getWorkspaceProfile().getCellSize();
+            Rect widgetPadding = dp.getWorkspaceProfile().getWidgetPadding();
 
             minSpanX = Math.max(minSpanX,
                     getSpanX(widgetPadding, minResizeWidth,
-                            dp.getWorkspaceIconProfile().getCellLayoutBorderSpacePx().x,
+                            dp.getWorkspaceProfile().getCellLayoutBorderSpacePx().x,
                             cellSize.x));
             minSpanY = Math.max(minSpanY,
                     getSpanY(widgetPadding, minResizeHeight,
-                            dp.getWorkspaceIconProfile().getCellLayoutBorderSpacePx().y,
+                            dp.getWorkspaceProfile().getCellLayoutBorderSpacePx().y,
                             cellSize.y));
 
             if (maxResizeWidth > 0) {
                 maxSpanX = Math.min(maxSpanX, getSpanX(widgetPadding, maxResizeWidth,
-                        dp.getWorkspaceIconProfile().getCellLayoutBorderSpacePx().x, cellSize.x));
+                        dp.getWorkspaceProfile().getCellLayoutBorderSpacePx().x, cellSize.x));
             }
             if (maxResizeHeight > 0) {
                 maxSpanY = Math.min(maxSpanY, getSpanY(widgetPadding, maxResizeHeight,
-                        dp.getWorkspaceIconProfile().getCellLayoutBorderSpacePx().y, cellSize.y));
+                        dp.getWorkspaceProfile().getCellLayoutBorderSpacePx().y, cellSize.y));
             }
 
             spanX = Math.max(spanX,
                     getSpanX(widgetPadding, minWidth,
-                            dp.getWorkspaceIconProfile().getCellLayoutBorderSpacePx().x,
+                            dp.getWorkspaceProfile().getCellLayoutBorderSpacePx().x,
                             cellSize.x));
             spanY = Math.max(spanY,
                     getSpanY(widgetPadding, minHeight,
-                            dp.getWorkspaceIconProfile().getCellLayoutBorderSpacePx().y,
+                            dp.getWorkspaceProfile().getCellLayoutBorderSpacePx().y,
                             cellSize.y));
         }
 
@@ -239,8 +240,8 @@ public class LauncherAppWidgetProviderInfo extends AppWidgetProviderInfo impleme
     }
 
     @Override
-    public Drawable getFullResIcon(BaseIconCache cache) {
-        return cache.getFullResIcon(getActivityInfo());
+    public Drawable getFullResIcon(@NonNull IconLoadRequest<CachedObject> request) {
+        return request.getIcon(getActivityInfo());
     }
 
     @Nullable

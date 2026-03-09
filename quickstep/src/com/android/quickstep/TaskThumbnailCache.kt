@@ -94,7 +94,6 @@ constructor(
         cache.updateIfAlreadyInCache(taskId, thumbnail)
     }
 
-    // TODO(b/387496731): Add ensureActive() calls if they show performance benefit
     /**
      * Retrieves a thumbnail for the provided `task` on the current thread. This should not be
      * called from the main thread.
@@ -149,7 +148,6 @@ constructor(
         }
     }
 
-    // TODO(b/387496731): Add ensureActive() calls if they show performance benefit
     /**
      * Retrieves a thumbnail for the provided `task` on the current thread. This should not be
      * called from the main thread.
@@ -161,6 +159,7 @@ constructor(
     override suspend fun getThumbnail(
         task: Task,
         requestResolution: RequestResolution,
+        shouldMakeRequestIfNeeded: Boolean,
     ): ThumbnailData? {
         if (!enableLowResThumbnailPreloading()) {
             throw IllegalArgumentException(
@@ -188,6 +187,10 @@ constructor(
         val cachedThumbnail: ThumbnailData? = cache.getAndInvalidateIfModified(task.key)
         if (cachedThumbnail?.thumbnail != null && isCorrectResolution(cachedThumbnail)) {
             return cachedThumbnail
+        }
+
+        if (!shouldMakeRequestIfNeeded) {
+            return null
         }
 
         return withContext(backgroundDispatcher) {

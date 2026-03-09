@@ -21,6 +21,7 @@ import static com.android.launcher3.BuildConfig.WIDGETS_ENABLED;
 import static com.android.launcher3.LauncherModel.useModelRepositoryBinding;
 import static com.android.launcher3.LauncherSettings.Animation.DEFAULT_NO_ICON;
 import static com.android.launcher3.Utilities.allowBGLaunch;
+import static com.android.launcher3.Utilities.shouldReduceWorkspaceBlurUsage;
 import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCHER_APP_LAUNCH_PENDING_INTENT;
 import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCHER_APP_LAUNCH_TAP;
 import static com.android.launcher3.util.Executors.MAIN_EXECUTOR;
@@ -64,6 +65,7 @@ import com.android.launcher3.DropTargetHandler;
 import com.android.launcher3.LauncherAppState;
 import com.android.launcher3.LauncherSettings;
 import com.android.launcher3.R;
+import com.android.launcher3.UndoDeleteController;
 import com.android.launcher3.Utilities;
 import com.android.launcher3.allapps.ActivityAllAppsContainerView;
 import com.android.launcher3.celllayout.CellPosMapper;
@@ -250,7 +252,8 @@ public interface ActivityContext extends SavedStateRegistryOwner {
 
     /** @return {@code true} if all apps background blur is enabled */
     default boolean isAllAppsBackgroundBlurEnabled() {
-        return WindowBlurState.getInstance(asContext()).getValue();
+        return !shouldReduceWorkspaceBlurUsage(asContext()) && WindowBlurState.getInstance(
+                asContext()).getValue();
     }
 
     DeviceProfile getDeviceProfile();
@@ -462,7 +465,7 @@ public interface ActivityContext extends SavedStateRegistryOwner {
             intent.setSourceBounds(Utilities.getViewBounds(v));
         }
         try {
-            if (isShortcut) {
+            if (isShortcut && intent.getPackage() != null) {
                 String id = ((WorkspaceItemInfo) item).getDeepShortcutId();
                 String packageName = intent.getPackage();
                 ((Context) this).getSystemService(LauncherApps.class).startShortcut(
@@ -546,6 +549,14 @@ public interface ActivityContext extends SavedStateRegistryOwner {
     default IModelWriter getModelWriter() {
         return LauncherAppState.getInstance(asContext()).getModel().getWriter(
                 false, this, null);
+    }
+
+    /**
+     * Returns the controller for managing undo delete operations.
+     */
+    @NonNull
+    default UndoDeleteController getUndoDeleteController() {
+        return getActivityComponent().getUndoDeleteController();
     }
 
     /** Set to manage objects that can be cleaned up along with the context */

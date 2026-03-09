@@ -29,7 +29,7 @@
     <string name="home_screen" msgid="5629429142036709174">"หน้าแรก"</string>
     <string name="set_default_home_app" msgid="5808906607627586381">"ตั้ง <xliff:g id="LAUNCHER_NAME">%1$s</xliff:g> เป็นแอปหน้าแรกเริ่มต้นในการตั้งค่า"</string>
     <string name="recent_task_option_split_screen" msgid="6690461455618725183">"แยกหน้าจอ"</string>
-    <string name="recent_task_option_aspect_ratio" msgid="7008605516391096989">"เปลี่ยนสัดส่วนการแสดงผล"</string>
+    <string name="recent_task_option_aspect_ratio" msgid="7008605516391096989">"เปลี่ยนสัดส่วนภาพ"</string>
     <string name="split_app_info_accessibility" msgid="5475288491241414932">"ข้อมูลแอปสำหรับ %1$s"</string>
     <string name="split_app_usage_settings" msgid="7214375263347964093">"การตั้งค่าการใช้งานสำหรับ %1$s"</string>
     <string name="close_task_accessibility" msgid="4765872229211282647">"ปิด %1$s"</string>
@@ -104,8 +104,10 @@
     <string name="dismiss_prediction_label" msgid="3357562989568808658">"ไม่ต้องแนะนำแอป"</string>
     <string name="pin_prediction" msgid="4196423321649756498">"ปักหมุดแอปที่คาดการณ์ไว้"</string>
     <string name="bubble" msgid="3072951361014076670">"บับเบิล"</string>
-    <string name="enable_app_lock" msgid="9190316880781005775">"ล็อกแอป"</string>
-    <string name="disable_app_lock" msgid="9071912028491244470">"นำล็อกออก"</string>
+    <!-- no translation found for enable_app_lock (5606772593969266718) -->
+    <skip />
+    <!-- no translation found for disable_app_lock (2252606435270354961) -->
+    <skip />
     <string name="widget_settings" msgid="5280157748464495511">"การตั้งค่า"</string>
     <string name="add_to_taskbar" msgid="1442306985857150792">"เพิ่มลงในแถบงาน"</string>
     <string name="remove_from_taskbar" msgid="5817026706030273018">"นำออกจากแถบงาน"</string>
@@ -258,6 +260,5 @@
     <string name="arch_shape_title" msgid="2213843822192871318">"ทรงโค้ง"</string>
     <string name="create_new_folder_button_text" msgid="4037052463794735069">"โฟลเดอร์ใหม่"</string>
     <string name="default_new_folder_name" msgid="8821062664729412079">"โฟลเดอร์ใหม่"</string>
-    <!-- no translation found for something_went_wrong (1492883246069060632) -->
-    <skip />
+    <string name="something_went_wrong" msgid="1492883246069060632">"เกิดข้อผิดพลาด"</string>
 </resources>

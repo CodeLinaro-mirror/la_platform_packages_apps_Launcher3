@@ -29,7 +29,7 @@
     <string name="home_screen" msgid="5629429142036709174">"Inicio"</string>
     <string name="set_default_home_app" msgid="5808906607627586381">"Define <xliff:g id="LAUNCHER_NAME">%1$s</xliff:g> como aplicación de inicio predeterminada en Ajustes"</string>
     <string name="recent_task_option_split_screen" msgid="6690461455618725183">"Pantalla dividida"</string>
-    <string name="recent_task_option_aspect_ratio" msgid="7008605516391096989">"Cambiar relación de aspecto"</string>
+    <string name="recent_task_option_aspect_ratio" msgid="7008605516391096989">"Relación de aspecto"</string>
     <string name="split_app_info_accessibility" msgid="5475288491241414932">"Información de la aplicación %1$s"</string>
     <string name="split_app_usage_settings" msgid="7214375263347964093">"Ajustes de uso para %1$s"</string>
     <string name="close_task_accessibility" msgid="4765872229211282647">"Cerrar %1$s"</string>
@@ -104,8 +104,10 @@
     <string name="dismiss_prediction_label" msgid="3357562989568808658">"No sugerir aplicación"</string>
     <string name="pin_prediction" msgid="4196423321649756498">"Fijar predicción"</string>
     <string name="bubble" msgid="3072951361014076670">"Burbuja"</string>
-    <string name="enable_app_lock" msgid="9190316880781005775">"Bloquear app"</string>
-    <string name="disable_app_lock" msgid="9071912028491244470">"Quitar bloqueo"</string>
+    <!-- no translation found for enable_app_lock (5606772593969266718) -->
+    <skip />
+    <!-- no translation found for disable_app_lock (2252606435270354961) -->
+    <skip />
     <string name="widget_settings" msgid="5280157748464495511">"Ajustes"</string>
     <string name="add_to_taskbar" msgid="1442306985857150792">"Añadir a la barra"</string>
     <string name="remove_from_taskbar" msgid="5817026706030273018">"Quitar de la barra"</string>
@@ -258,6 +260,5 @@
     <string name="arch_shape_title" msgid="2213843822192871318">"Arco"</string>
     <string name="create_new_folder_button_text" msgid="4037052463794735069">"Nueva carpeta"</string>
     <string name="default_new_folder_name" msgid="8821062664729412079">"Nueva carpeta"</string>
-    <!-- no translation found for something_went_wrong (1492883246069060632) -->
-    <skip />
+    <string name="something_went_wrong" msgid="1492883246069060632">"Se ha producido un error"</string>
 </resources>

@@ -56,11 +56,11 @@ import com.android.launcher3.taskbar.bubbles.flyout.FlyoutScheduler
 import com.android.launcher3.taskbar.bubbles.model.BubbleIcon
 import com.android.launcher3.taskbar.bubbles.stashing.BubbleStashController
 import com.android.launcher3.taskbar.bubbles.stashing.BubbleStashController.BubbleLauncherState
+import com.android.users.UserType
 import com.android.wm.shell.shared.animation.PhysicsAnimator
 import com.android.wm.shell.shared.animation.PhysicsAnimatorTestUtils
 import com.android.wm.shell.shared.bubbles.BubbleBarLocation
 import com.android.wm.shell.shared.bubbles.BubbleInfo
-import com.android.wm.shell.shared.bubbles.UserType
 import com.google.common.truth.Truth.assertThat
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
@@ -1657,6 +1657,7 @@ class BubbleBarViewAnimatorTest {
                 override val collapsedColor = Color.BLUE
                 override val collapsedElevation = 1f
                 override val distanceToRevealTriangle = 10f
+                override val horizontalMargin = 20
             }
         val flyoutCallbacks =
             object : FlyoutCallbacks {

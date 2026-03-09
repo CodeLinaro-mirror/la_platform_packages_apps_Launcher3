@@ -23,7 +23,6 @@ import static android.window.DesktopModeFlags.ENABLE_TASKBAR_OVERFLOW;
 import static com.android.launcher3.BubbleTextView.DISPLAY_TASKBAR;
 import static com.android.launcher3.Flags.enableCursorDrivenWorkflows;
 import static com.android.launcher3.Flags.enableLauncherIconShapes;
-import static com.android.launcher3.Flags.refactorTaskbarUiState;
 import static com.android.launcher3.LauncherAnimUtils.SCALE_PROPERTY;
 import static com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_APP_GROUP;
 import static com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_FOLDER;
@@ -232,9 +231,7 @@ public class TaskbarView extends FrameLayout implements FolderIcon.FolderIconPar
         mPinnedHitRectBuffer = resources.getDimensionPixelSize(
             R.dimen.taskbar_pinned_hit_rect_buffer);
 
-        if (refactorTaskbarUiState()) {
-            mTaskbarUiState.setIsTaskbarViewShown(isShown());
-        }
+        mTaskbarUiState.setIsTaskbarViewShown(isShown());
         mTransientTaskbarMinWidth = resources.getDimension(R.dimen.transient_taskbar_min_width);
 
         // TODO: Disable touch events on QSB otherwise it can crash.
@@ -373,7 +370,7 @@ public class TaskbarView extends FrameLayout implements FolderIcon.FolderIconPar
             numStaticViews++;
         }
 
-        if (mActivityContext.getDeviceProfile().isQsbInline) {
+        if (mActivityContext.getDeviceProfile().getHotseatProfile().isQsbInline()) {
             addView(mQsb, mIsRtl ? numStaticViews : 0);
             mQsb.setVisibility(View.INVISIBLE);
             numStaticViews++;
@@ -478,7 +475,9 @@ public class TaskbarView extends FrameLayout implements FolderIcon.FolderIconPar
 
             @Override
             public int calculateDropIndexInContainer(int dropIndex, int hiddenChildIndex) {
-                int dropSpotOffset = mActivityContext.getDeviceProfile().isQsbInline ? 2 : 1;
+                int dropSpotOffset =
+                        mActivityContext.getDeviceProfile().getHotseatProfile().isQsbInline()
+                                ? 2 : 1;
                 int targetIndex = Math.min(dropIndex, indexOfChild(mTaskbarPinnedOverflowView) - 1)
                         + dropSpotOffset;
                 if (hiddenChildIndex > -1 && hiddenChildIndex < targetIndex) {
@@ -692,14 +691,9 @@ public class TaskbarView extends FrameLayout implements FolderIcon.FolderIconPar
             updateHandoffSuggestions(handoffSuggestions);
         }
 
-        // Recents divider takes priority.
+        // Recents divider always takes priority.
         if (!mAddedDividerForRecents) {
-            boolean allAppsDividerAllowed = !mActivityContext.isTaskbarShowingDesktopTasks();
-            if (allAppsDividerAllowed) {
-                updateAllAppsDivider();
-            } else if (getChildAt(getExpectedAllAppsDividerIndex()) == mTaskbarDividerContainer) {
-                removeView(mTaskbarDividerContainer);
-            }
+            updateAllAppsDivider();
         }
 
         mAllAppsButtonContainer.updateTaskbarMinimalState(isTaskbarInMinimalState());
@@ -1582,9 +1576,7 @@ public class TaskbarView extends FrameLayout implements FolderIcon.FolderIconPar
     @Override
     public void onVisibilityAggregated(boolean isVisible) {
         super.onVisibilityAggregated(isVisible);
-        if (refactorTaskbarUiState()) {
-            mTaskbarUiState.setIsTaskbarViewShown(isShown());
-        }
+        mTaskbarUiState.setIsTaskbarViewShown(isShown());
     }
 
     /**
@@ -1617,7 +1609,7 @@ public class TaskbarView extends FrameLayout implements FolderIcon.FolderIconPar
         int count = getChildCount()
                 - numContainers
                 + numIconsInContainers;
-        if (mActivityContext.getDeviceProfile().isQsbInline) {
+        if (mActivityContext.getDeviceProfile().getHotseatProfile().isQsbInline()) {
             count--; // Exclude QSB
         }
         // count can be negative if views aren't added
@@ -1879,12 +1871,11 @@ public class TaskbarView extends FrameLayout implements FolderIcon.FolderIconPar
     }
 
     @Override
-    public void updateItemViewVisibilityForDragState(View itemView, boolean isDragged) {
+    public boolean updateItemViewVisibilityForDragState(View itemView, boolean isDragged) {
         if (mHotseatIconsContainer != null) {
-            mHotseatIconsContainer.updateItemViewVisibilityForDragState(itemView, isDragged);
-            return;
+            return mHotseatIconsContainer.updateItemViewVisibilityForDragState(itemView, isDragged);
         }
-        mDragDelegate.updateItemViewVisibilityForDragState(itemView, isDragged);
+        return mDragDelegate.updateItemViewVisibilityForDragState(itemView, isDragged);
     }
 
     @Override
@@ -1964,6 +1955,19 @@ public class TaskbarView extends FrameLayout implements FolderIcon.FolderIconPar
         mActivityContext.getDragLayer().getDescendantRectRelativeToSelf(overflowIcon,
                 overflowIconRect);
         return overflowIconRect.contains(Math.round(point[0]), Math.round(point[1]));
+    }
+
+    /**
+     * Cleans up the cached drag state in the overflow view.
+     *
+     * @param itemDropped True if the dragged object was successfully dropped.
+     */
+    public void cleanUpOverflowDragState(boolean itemDropped) {
+        TaskbarOverflowView overflowIcon = getTaskbarPinnedOverflowView();
+        if (overflowIcon == null) {
+            return;
+        }
+        overflowIcon.onItemDragEnded(itemDropped);
     }
 
     public static class TaskbarLayoutParams extends FrameLayout.LayoutParams {

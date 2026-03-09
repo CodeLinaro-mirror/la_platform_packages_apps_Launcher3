@@ -24,9 +24,7 @@ import static com.android.app.animation.Interpolators.EMPHASIZED;
 import static com.android.launcher3.AbstractFloatingView.TYPE_FOLDER;
 import static com.android.launcher3.AbstractFloatingView.TYPE_ICON_SURFACE;
 import static com.android.launcher3.AbstractFloatingView.TYPE_REBIND_SAFE;
-import static com.android.launcher3.AbstractFloatingView.TYPE_WIDGETS_FULL_SHEET;
 import static com.android.launcher3.AbstractFloatingView.getTopOpenViewWithType;
-import static com.android.launcher3.Flags.refactorTaskbarUiState;
 import static com.android.launcher3.LauncherAnimUtils.HOTSEAT_SCALE_PROPERTY_FACTORY;
 import static com.android.launcher3.LauncherAnimUtils.SCALE_INDEX_WIDGET_TRANSITION;
 import static com.android.launcher3.LauncherAnimUtils.SPRING_LOADED_EXIT_DELAY;
@@ -44,7 +42,6 @@ import static com.android.launcher3.LauncherConstants.SavedInstanceKeys.RUNTIME_
 import static com.android.launcher3.LauncherConstants.SavedInstanceKeys.RUNTIME_STATE_PENDING_REQUEST_ARGS;
 import static com.android.launcher3.LauncherConstants.SavedInstanceKeys.RUNTIME_STATE_PENDING_REQUEST_CODE;
 import static com.android.launcher3.LauncherConstants.SavedInstanceKeys.RUNTIME_STATE_RECREATE_TO_UPDATE_THEME;
-import static com.android.launcher3.LauncherConstants.SavedInstanceKeys.RUNTIME_STATE_WIDGET_PANEL;
 import static com.android.launcher3.LauncherConstants.TraceEvents.DISPLAY_ALL_APPS_TRACE_METHOD_NAME;
 import static com.android.launcher3.LauncherConstants.TraceEvents.DISPLAY_WORKSPACE_TRACE_METHOD_NAME;
 import static com.android.launcher3.LauncherConstants.TraceEvents.ON_CREATE_EVT;
@@ -123,7 +120,6 @@ import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Parcelable;
 import android.os.SystemClock;
 import android.os.Trace;
 import android.os.UserHandle;
@@ -140,7 +136,6 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.ViewGroup;
-import android.view.ViewTreeObserver.OnPreDrawListener;
 import android.view.WindowInsets;
 import android.view.WindowInsetsAnimation;
 import android.view.WindowManager.LayoutParams;
@@ -186,8 +181,8 @@ import com.android.launcher3.logging.InstanceId;
 import com.android.launcher3.logging.InstanceIdSequence;
 import com.android.launcher3.logging.StartupLatencyLogger;
 import com.android.launcher3.logging.StatsLogManager;
-import com.android.launcher3.model.ItemInstallQueue;
 import com.android.launcher3.model.IModelWriter;
+import com.android.launcher3.model.ItemInstallQueue;
 import com.android.launcher3.model.StringCache;
 import com.android.launcher3.model.data.CollectionInfo;
 import com.android.launcher3.model.data.FolderInfo;
@@ -250,7 +245,6 @@ import com.android.launcher3.widget.WidgetAddFlowHandler;
 import com.android.launcher3.widget.WidgetManagerHelper;
 import com.android.launcher3.widget.WidgetVisibilityTracker;
 import com.android.launcher3.widget.custom.CustomWidgetManager;
-import com.android.launcher3.widget.picker.WidgetsFullSheet;
 import com.android.launcher3.widget.picker.model.WidgetPickerDataProvider;
 import com.android.launcher3.widget.util.WidgetSizeHandler;
 import com.android.systemui.plugins.shared.LauncherOverlayManager;
@@ -348,7 +342,6 @@ public class Launcher extends StatefulActivity<LauncherState>
     // Used to notify when an activity launch has been deferred because launcher is not yet resumed
     // TODO: See if we can remove this later
     private Runnable mOnDeferredActivityLaunchCallback;
-    private OnPreDrawListener mOnInitialBindListener;
 
     private LauncherModel mModel;
     private IModelWriter mModelWriter;
@@ -433,9 +426,7 @@ public class Launcher extends StatefulActivity<LauncherState>
         initDragController();
         mAllAppsController = new AllAppsTransitionController(this);
         mStateManager = new StateManager<>(this, NORMAL);
-        if (refactorTaskbarUiState()) {
-            mStateManager.setLauncherUiState(mLauncherUiState);
-        }
+        mStateManager.setLauncherUiState(mLauncherUiState);
 
         mAppWidgetManager = new WidgetManagerHelper(this);
         mAppWidgetHolder = LauncherWidgetHolder.newInstance(this);
@@ -480,12 +471,10 @@ public class Launcher extends StatefulActivity<LauncherState>
         }
 
         mStartupLatencyLogger.logWorkspaceLoadStartTime();
-        if (!mModel.addCallbacksAndLoad(modelCallbacks)) {
-            if (!internalStateHandled) {
-                // If we are not binding synchronously, pause drawing until initial bind complete,
-                // so that the system could continue to show the device loading prompt
-                mOnInitialBindListener = Boolean.FALSE::booleanValue;
-            }
+        if (useModelRepositoryBinding()) {
+            mModel.activate();
+        } else {
+            mModel.addCallbacksAndLoad(modelCallbacks);
         }
         modelCallbacks.bindWorkspaceDataModel();
 
@@ -493,10 +482,6 @@ public class Launcher extends StatefulActivity<LauncherState>
         setDefaultKeyMode(DEFAULT_KEYS_SEARCH_LOCAL);
 
         setContentView(getRootView());
-
-        if (mOnInitialBindListener != null) {
-            getRootView().getViewTreeObserver().addOnPreDrawListener(mOnInitialBindListener);
-        }
         getRootView().dispatchInsets();
 
         final SettingsCache settingsCache = SettingsCache.INSTANCE.get(this);
@@ -684,9 +669,7 @@ public class Launcher extends StatefulActivity<LauncherState>
         }
 
         mDeviceProfile = deviceProfile;
-        if (refactorTaskbarUiState()) {
-            mLauncherUiState.setDeviceProfile(deviceProfile);
-        }
+        mLauncherUiState.setDeviceProfile(deviceProfile);
 
         if (FOLDABLE_SINGLE_PAGE.get() && mDeviceProfile.getDeviceProperties().isTwoPanels()) {
             mCellPosMapper = new TwoPanelCellPosMapper(mDeviceProfile.inv.numColumns);
@@ -1170,12 +1153,6 @@ public class Launcher extends StatefulActivity<LauncherState>
                 RUNTIME_STATE_PENDING_REQUEST_CODE, mPendingActivityRequestCode);
 
         mPendingActivityResult = savedState.getParcelable(RUNTIME_STATE_PENDING_ACTIVITY_RESULT);
-
-        SparseArray<Parcelable> widgetsState =
-                savedState.getSparseParcelableArray(RUNTIME_STATE_WIDGET_PANEL);
-        if (widgetsState != null) {
-            WidgetsFullSheet.show(this, false).restoreHierarchyState(widgetsState);
-        }
     }
 
     /**
@@ -1452,9 +1429,6 @@ public class Launcher extends StatefulActivity<LauncherState>
             if (!internalStateHandled) {
                 // In all these cases, only animate if we're already on home
                 int excludedViews = AbstractFloatingView.TYPE_LISTENER;
-                if (intent.getBooleanExtra(EXCLUDE_CLOSE_WIDGET_PICKER, false)) {
-                    excludedViews |= TYPE_WIDGETS_FULL_SHEET;
-                }
                 AbstractFloatingView.closeAllOpenViewsExcept(this, isStarted(), excludedViews);
 
 
@@ -1574,16 +1548,6 @@ public class Launcher extends StatefulActivity<LauncherState>
                 mWorkspace.getCurrentPageScreenIds().getArray().toArray());
         outState.putInt(RUNTIME_STATE, mStateManager.getState().ordinal);
 
-        AbstractFloatingView widgets = AbstractFloatingView
-                .getOpenView(this, AbstractFloatingView.TYPE_WIDGETS_FULL_SHEET);
-        if (widgets != null) {
-            SparseArray<Parcelable> widgetsState = new SparseArray<>();
-            widgets.saveHierarchyState(widgetsState);
-            outState.putSparseParcelableArray(RUNTIME_STATE_WIDGET_PANEL, widgetsState);
-        } else {
-            outState.remove(RUNTIME_STATE_WIDGET_PANEL);
-        }
-
         // We close any open folders and shortcut containers that are not safe for rebind,
         // and we need to make sure this state is reflected.
         AbstractFloatingView.closeAllOpenViewsExcept(
@@ -1624,11 +1588,6 @@ public class Launcher extends StatefulActivity<LauncherState>
         TextKeyListener.getInstance().release();
         modelCallbacks.clearPendingBinds();
         LauncherAppState.getIDP(this).removeOnChangeListener(this);
-        // if Launcher activity is recreated, {@link Window} including {@link ViewTreeObserver}
-        // could be preserved in {@link ActivityThread#scheduleRelaunchActivity(IBinder)} if the
-        // previous activity has not stopped, which could happen when wallpaper detects a color
-        // changes while launcher is still loading.
-        getRootView().getViewTreeObserver().removeOnPreDrawListener(mOnInitialBindListener);
         mOverlayManager.onActivityDestroyed();
         PillColorProvider.getInstance(mWorkspace.getContext()).unregisterObserver();
     }
@@ -1644,6 +1603,7 @@ public class Launcher extends StatefulActivity<LauncherState>
     @Override
     public DropTargetHandler getDropTargetHandler() {
         return new DropTargetHandler(this,
+                getUndoDeleteController(),
                 LauncherComponentProvider.get(this).getHomeScreenFilesProvider(),
                 this.getMainExecutor());
     }
@@ -2001,9 +1961,6 @@ public class Launcher extends StatefulActivity<LauncherState>
         if (shouldShowHomeBehindDesktop()) {
             Runnable endAction = () -> {
                 closeOpenViews();
-                if (isInState(ALL_APPS)) {
-                    getStateManager().goToState(NORMAL);
-                }
             };
             if (result != null) {
                 result.add(endAction);
@@ -2182,14 +2139,7 @@ public class Launcher extends StatefulActivity<LauncherState>
      */
     @TargetApi(Build.VERSION_CODES.S)
     public void bindComplete(int workspaceItemCount, boolean isBindSync) {
-        if (mOnInitialBindListener != null) {
-            getRootView().getViewTreeObserver().removeOnPreDrawListener(mOnInitialBindListener);
-            mOnInitialBindListener = null;
-        }
-
         mStartupLatencyLogger = mStartupLatencyLogger.finishLogs(workspaceItemCount, isBindSync);
-
-
     }
 
     /**
@@ -2827,33 +2777,11 @@ public class Launcher extends StatefulActivity<LauncherState>
             Toast.makeText(this, R.string.safemode_widget_error, Toast.LENGTH_SHORT).show();
             return false;
         } else {
-            if (com.android.launcher3.Flags.enableWidgetPickerRefactor()) {
-                Intent intent = new Intent(Intent.ACTION_PICK);
-                intent.setPackage(asContext().getPackageName());
-                asContext().startActivity(intent);
-                return true;
-            }
-            openWidgetsFullSheet();
+            Intent intent = new Intent(Intent.ACTION_PICK);
+            intent.setPackage(asContext().getPackageName());
+            asContext().startActivity(intent);
             return true;
         }
-    }
-
-    /** Returns WidgetsFullSheet that was opened, or null if nothing was opened. */
-    @VisibleForTesting
-    public WidgetsFullSheet openWidgetsFullSheet() {
-        AbstractFloatingView floatingView = AbstractFloatingView.getTopOpenViewWithType(
-                this, TYPE_WIDGETS_FULL_SHEET);
-        if (floatingView != null) {
-            return (WidgetsFullSheet) floatingView;
-        }
-        if (shouldShowHomeBehindDesktop() && !isTopResumedActivity()) {
-            Intent intent = new Intent(Intent.ACTION_MAIN)
-                    .addCategory(Intent.CATEGORY_HOME)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    .putExtra(EXCLUDE_CLOSE_WIDGET_PICKER, true);
-            startActivity(intent);
-        }
-        return WidgetsFullSheet.show(this, true /* animated */);
     }
 
     /**
@@ -2901,6 +2829,13 @@ public class Launcher extends StatefulActivity<LauncherState>
     public void onTopResumedActivityChanged(boolean isTopResumed) {
         super.onTopResumedActivityChanged(isTopResumed);
         mLauncherUiState.setIsTopResumedActivity(isTopResumed);
+
+        // If Launcher is in a mode where it can show behind desktop windows, dismiss AllApps when
+        // another window becomes top-most to keep the background clear. In other cases,
+        // AllApps is kept in the back stack so users can return to it via back navigation.
+        if (shouldShowHomeBehindDesktop() && !isTopResumed && isInState(ALL_APPS)) {
+            getStateManager().goToState(NORMAL);
+        }
     }
 
     /**

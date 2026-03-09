@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.ComposeView
 import com.android.launcher3.AbstractFloatingView
 import com.android.launcher3.DragSource
 import com.android.launcher3.DropTarget.DragObject
+import com.android.launcher3.Launcher
 import com.android.launcher3.R
 import com.android.launcher3.accessibility.LauncherAccessibilityDelegate
 import com.android.launcher3.dragndrop.DragController
@@ -37,6 +38,8 @@ import com.android.launcher3.dragndrop.DragOptions
 import com.android.launcher3.folder.Folder
 import com.android.launcher3.logging.StatsLogManager.LauncherEvent
 import com.android.launcher3.model.data.ItemInfo
+import com.android.launcher3.model.data.ItemInfoWithIcon
+import com.android.launcher3.model.data.WorkspaceItemInfo
 import com.android.launcher3.popup.ui.ComposePopup
 import com.android.launcher3.popup.ui.DeepShortcutClickEvent
 import com.android.launcher3.popup.ui.PopupItem
@@ -44,6 +47,7 @@ import com.android.launcher3.popup.ui.PopupViewModel
 import com.android.launcher3.popup.ui.SystemShortcutClickEvent
 import com.android.launcher3.util.ShortcutUtil
 import com.android.launcher3.views.ActivityContext
+import com.android.launcher3.views.BaseDragLayer
 
 /**
  * Base popup container for shortcuts associated with the item {@code originalView}
@@ -74,6 +78,39 @@ open class PopupContainer<T>(
 
     val viewModel = PopupViewModel()
 
+    private val animationProxyView by lazy { View(context).apply { visibility = INVISIBLE } }
+
+    /** Handles a deep shortcut click event. */
+    private fun onDeepShortcutClick(item: WorkspaceItemInfo, iconBounds: Rect) {
+        if (animationProxyView.parent == null) {
+            popupContainer.addView(animationProxyView)
+        }
+
+        val dlPos = IntArray(2).also { popupContainer.getLocationInWindow(it) }
+        animationProxyView.apply {
+            tag = item
+            layoutParams =
+                (layoutParams as? BaseDragLayer.LayoutParams ?: BaseDragLayer.LayoutParams(0, 0))
+                    .apply {
+                        width = iconBounds.width()
+                        height = iconBounds.height()
+                        x = iconBounds.left - dlPos[0]
+                        y = iconBounds.top - dlPos[1]
+                        customPosition = true
+                        ignoreInsets = true
+                    }
+        }
+        mActivityContext.itemOnClickListener.onClick(animationProxyView)
+    }
+
+    private fun canAddShortcut(): Boolean {
+        val isPinnable =
+            (originalView.tag as? ItemInfoWithIcon)?.let {
+                (it.runtimeStatusFlags and ItemInfoWithIcon.FLAG_NOT_PINNABLE) == 0
+            } == true
+        return mActivityContext is Launcher && isPinnable
+    }
+
     open fun showComposePopup(systemShortcuts: List<PopupItem>, deepShortcutCount: Int = 0) {
         mIsOpen = true
         popupContainer.addView(this)
@@ -83,7 +120,10 @@ open class PopupContainer<T>(
         lp.height = LayoutParams.WRAP_CONTENT
         layoutParams = lp
 
-        viewModel.init(systemShortcuts, deepShortcutCount)
+        val deviceProfile = mActivityContext.deviceProfile
+        val availableHeightDp =
+            deviceProfile.pxToDp(deviceProfile.deviceProperties.availableHeightPx.toFloat())
+        viewModel.init(systemShortcuts, deepShortcutCount, availableHeightDp)
 
         val composePopup =
             ComposeView(context).apply {
@@ -96,33 +136,40 @@ open class PopupContainer<T>(
                                     clickedItem.item.popupAction()
                                 }
                                 is DeepShortcutClickEvent -> {
-                                    originalView.tag = clickedItem.item
-                                    mActivityContext.itemOnClickListener.onClick(originalView)
+                                    (clickedItem.item as? WorkspaceItemInfo)?.let {
+                                        onDeepShortcutClick(it, clickedItem.iconBounds)
+                                    }
                                 }
                             }
                             close(true)
                         },
-                        onAddIconClick = { clickedItem ->
-                            val accessibilityDelegate = mActivityContext?.accessibilityDelegate
-                            if (accessibilityDelegate is LauncherAccessibilityDelegate) {
-                                accessibilityDelegate.addToWorkspace(
-                                    /* itemInfo */ clickedItem,
-                                    /* accessibility= */ false,
-                                )
-                                /*finishCallback=*/ {
-                                    mActivityContext.statsLogManager
-                                        .logger()
-                                        .withItemInfo(clickedItem)
-                                        .log(LauncherEvent.LAUNCHER_TAP_TO_ADD_DEEP_SHORTCUT)
-                                }
-                                Unit
-                            }
+                        onAddIconClick =
+                            if (canAddShortcut())
+                                { clickedItem ->
+                                    val accessibilityDelegate =
+                                        mActivityContext?.accessibilityDelegate
+                                    if (accessibilityDelegate is LauncherAccessibilityDelegate) {
+                                        accessibilityDelegate.addToWorkspace(
+                                            /* itemInfo */ clickedItem,
+                                            /* accessibility= */ false,
+                                        )
+                                        /*finishCallback=*/ {
+                                            mActivityContext.statsLogManager
+                                                .logger()
+                                                .withItemInfo(clickedItem)
+                                                .log(
+                                                    LauncherEvent.LAUNCHER_TAP_TO_ADD_DEEP_SHORTCUT
+                                                )
+                                        }
+                                        Unit
+                                    }
 
-                            // If we have an open folder, don't animate the popup closing.
-                            val folder = getOpenView<Folder>(mActivityContext, TYPE_FOLDER)
-                            close(folder == null)
-                            folder?.close(true)
-                        },
+                                    // If we have an open folder, don't animate the popup closing.
+                                    val folder = getOpenView<Folder>(mActivityContext, TYPE_FOLDER)
+                                    close(folder == null)
+                                    folder?.close(true)
+                                }
+                            else null,
                         onDeepShortcutLongPress = { itemInfoWithIcon, offset ->
                             val touchPoint = PointF(offset.x, offset.y)
                             deepShortcutDragHandler?.onDeepShortcutLongPress(
@@ -156,6 +203,7 @@ open class PopupContainer<T>(
     @CallSuper
     override fun closeComplete() {
         super.closeComplete()
+        popupContainer.removeView(animationProxyView)
         mActivityContext?.dragController?.removeDragListener(this)
         val openPopup = getOpen(mActivityContext)
         if (openPopup == null || openPopup.originalView !== iconViewController) {
@@ -215,6 +263,16 @@ open class PopupContainer<T>(
         // Hide the container, but don't remove it yet because that interferes with touch events.
         mDeferContainerRemoval = true
         handleClose(/* animate */ true)
+    }
+
+    @CallSuper
+    override fun onDragEnterWindow(dragObject: DragObject, options: DragOptions) {
+        // No-op
+    }
+
+    @CallSuper
+    override fun onDragExitWindow(dragObject: DragObject, options: DragOptions) {
+        // No-op
     }
 
     override fun onDropCompleted(target: View, d: DragObject, success: Boolean) {}

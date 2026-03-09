@@ -17,7 +17,6 @@
 package com.android.launcher3;
 
 import static com.android.launcher3.ButtonDropTarget.TOOLTIP_DEFAULT;
-import static com.android.launcher3.Utilities.shouldEnableCursorDrivenWorkflows;
 import static com.android.launcher3.anim.AlphaUpdateListener.updateVisibility;
 
 import android.animation.TimeInterpolator;
@@ -100,11 +99,11 @@ public class DropTargetBar extends FrameLayout
         if (deviceProfile.getDeviceProperties().isLargeScreen()) {
             // XXX: If the icon size changes across orientations, we will have to take
             //      that into account here too.
-            horizontalMargin = ((widthPx - 2 * deviceProfile.mWorkspaceProfile.getEdgeMarginPx()
+            horizontalMargin = ((widthPx - 2 * deviceProfile.getWorkspaceProfile().getEdgeMarginPx()
                     - (deviceProfile.inv.numColumns
-                        * deviceProfile.getWorkspaceIconProfile().getCellWidthPx()))
+                        * deviceProfile.getWorkspaceProfile().getCellWidthPx()))
                     / (2 * (deviceProfile.inv.numColumns + 1)))
-                    + deviceProfile.mWorkspaceProfile.getEdgeMarginPx();
+                    + deviceProfile.getWorkspaceProfile().getEdgeMarginPx();
         } else {
             horizontalMargin = getContext().getResources()
                     .getDimensionPixelSize(R.dimen.drop_target_bar_margin_horizontal);
@@ -133,11 +132,6 @@ public class DropTargetBar extends FrameLayout
     }
 
     public void setup(DragController dragController) {
-        if (shouldEnableCursorDrivenWorkflows(mLauncher)) {
-            setVisibility(View.GONE);
-            return;
-        }
-
         dragController.addDragListener(this);
         for (int i = 0; i < mDropTargets.length; i++) {
             dragController.addDragListener(mDropTargets[i]);
@@ -258,10 +252,10 @@ public class DropTargetBar extends FrameLayout
         } else {
             int workspaceCenter = (ws.getLeft() + ws.getRight()) / 2;
             int cellLayoutCenter = ((dp.getInsets().left
-                    + dp.mWorkspaceProfile.getWorkspacePadding().left)
+                    + dp.getWorkspaceProfile().getWorkspacePadding().left)
                     + (dp.getDeviceProperties().getWidthPx()
                     - dp.getInsets().right
-                    - dp.mWorkspaceProfile.getWorkspacePadding().right)) / 2;
+                    - dp.getWorkspaceProfile().getWorkspacePadding().right)) / 2;
             int cellLayoutCenterOffset = (int) ((cellLayoutCenter - workspaceCenter) * scale);
             barCenter = workspaceCenter + cellLayoutCenterOffset - left;
         }
@@ -340,6 +334,16 @@ public class DropTargetBar extends FrameLayout
     @Override
     public void onDragStart(DropTarget.DragObject dragObject, DragOptions options) {
         animateToVisibility(true);
+    }
+
+    @Override
+    public void onDragEnterWindow(DropTarget.DragObject dragObject, DragOptions options) {
+        // No-op
+    }
+
+    @Override
+    public void onDragExitWindow(DropTarget.DragObject dragObject, DragOptions options) {
+        // No-op
     }
 
     /**

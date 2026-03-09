@@ -32,11 +32,15 @@ import com.android.launcher3.UtilitiesKt.isPersistedModelItem
 import com.android.launcher3.dagger.LauncherComponentProvider.appComponent
 import com.android.launcher3.model.BgDataModel
 import com.android.launcher3.model.ModelDbController
+import com.android.launcher3.model.data.AppInfo
+import com.android.launcher3.model.data.AppsListData
 import com.android.launcher3.model.data.ItemInfo
+import com.android.launcher3.model.data.WorkspaceItemInfo
 import com.android.launcher3.pm.UserCache
 import com.android.launcher3.util.Executors.MAIN_EXECUTOR
 import com.android.launcher3.util.Executors.MODEL_EXECUTOR
 import com.android.launcher3.util.Executors.getTaskbarUiThread
+import com.android.launcher3.views.ActivityContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
@@ -61,7 +65,9 @@ object ModelTestExtensions {
 
     /** Loads the model in memory synchronously */
     fun LauncherModel.loadModelSync() {
-        forceReload().toCompletableFuture().get()
+        // Prevent taskbar recreation from canceling loader task scheduled from test.
+        forceReload("loadModelSync").toCompletableFuture().get()
+        TestUtil.runOnExecutorSync(MODEL_EXECUTOR) {}
         TestUtil.runOnExecutorSync(MAIN_EXECUTOR) {}
         TestUtil.runOnExecutorSync(getTaskbarUiThread()) {}
     }
@@ -181,8 +187,45 @@ object ModelTestExtensions {
                     Log.w(TAG, "Failed to clear Launcher DB. It was already deleted.", e)
                 }
             }
-            TestUtil.runOnExecutorSync(MAIN_EXECUTOR) { model.forceReload() }
+            TestUtil.runOnExecutorSync(MAIN_EXECUTOR) { model.forceReload("setModelLayout") }
             model.loadModelSync()
+        }
+    }
+
+    /** Preloads the provided data in model repository */
+    fun Context.preloadModelData(vararg items: ItemInfo) {
+        val state = appComponent.testableModelState
+        state.dataModel.dataLoadComplete(
+            SparseArray<ItemInfo>().apply { items.forEach { this[it.id] = it } }
+        )
+        state.dbController.updateMaxIdForTest(items.maxOf { it.id })
+        preloadAppList(
+            items
+                .filterIsInstance<WorkspaceItemInfo>()
+                .map { item -> AppInfo(item.targetComponent, item.title, item.user, item.intent) }
+                .toTypedArray()
+        )
+    }
+
+    /** Preloads the provided data in model repository */
+    @JvmOverloads
+    @JvmStatic
+    fun Context.preloadAppList(apps: Array<AppInfo>, flags: Int = 0) =
+        appComponent.testableModelState.appsRepo.dispatchChange(AppsListData(apps, flags))
+
+    /** Similar to [Context.preloadAppList] but ensures that the AppStore is also initialized */
+    @JvmOverloads
+    @JvmStatic
+    fun ActivityContext.preloadAppStore(apps: Array<AppInfo>, flags: Int = 0) {
+        if (LauncherModel.useModelRepositoryBinding()) {
+            asContext().preloadAppList(apps, flags)
+            TestUtil.runOnExecutorSync(uiExecutor) { activityComponent.appsStore }
+        } else {
+            activityComponent.appsStore.setApps(
+                apps,
+                flags,
+                AppsListData(apps, flags).packageUserKeyToUidMap,
+            )
         }
     }
 }

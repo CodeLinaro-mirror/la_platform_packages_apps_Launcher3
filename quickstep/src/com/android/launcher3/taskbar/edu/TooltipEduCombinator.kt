@@ -36,7 +36,6 @@ import com.android.launcher3.util.OnboardingPrefs.TASKBAR_EDU_TOOLTIP_STEP
 import com.android.launcher3.util.OnboardingPrefs.TASKBAR_SEEN_EDU_FLAGS
 import com.android.launcher3.views.ActivityContext
 import com.android.systemui.shared.Flags.enableRecentsInTaskbar
-import com.android.wm.shell.shared.bubbles.BubbleAnythingFlagHelper
 import java.io.PrintWriter
 
 /**
@@ -47,6 +46,7 @@ import java.io.PrintWriter
 class TooltipEduCombinator(
     activityContext: ActivityContext,
     private val taskbarStashController: TaskbarStashController,
+    private val blockedBySysUiState: () -> Boolean,
     private val shouldShowSearchEduResolver: () -> Boolean,
 ) {
 
@@ -58,6 +58,7 @@ class TooltipEduCombinator(
             return !Utilities.isRunningInTestHarness() &&
                 !context.isPhoneMode &&
                 !context.isTinyTaskbar &&
+                !blockedBySysUiState() &&
                 !UserManager.isDeviceInDemoMode(context)
         }
 
@@ -73,9 +74,8 @@ class TooltipEduCombinator(
     private val userHasSeenOldPinningEdu: Boolean
         get() = TASKBAR_EDU_TOOLTIP_STEP.get(context) > TOOLTIP_STEP_FEATURES
 
-    /** Indicates whether the createAnyBubbleEnabled is enabled. */
-    @VisibleForTesting
-    var createAnyBubbleEnabled: Boolean = BubbleAnythingFlagHelper.enableCreateAnyBubble()
+    /** Indicates whether app bubbles are enabled. */
+    @VisibleForTesting var createAnyBubbleEnabled: Boolean = context.areAppBubblesSupported()
 
     /** Creates the [TooltipInfo] for the split-screen educational tooltip. */
     private val splitTooltipInfo: TooltipInfo
@@ -318,6 +318,11 @@ class TooltipEduCombinator(
         updateFlags: Boolean = true
     ): MutableCollection<TooltipInfo> {
         val tooltipsToShow = mutableListOf<TooltipInfo>()
+
+        if (blockedBySysUiState()) {
+            return tooltipsToShow
+        }
+
         var bubblesTooltipIndex = -1
         var pinningTooltipIndex = -1
         if (
@@ -382,7 +387,7 @@ class TooltipEduCombinator(
         flag: Int,
         updateFlag: Boolean = true,
     ): Boolean {
-        val result = !getFlag(flag) && (optionalCondition?.invoke() ?: true)
+        val result = (optionalCondition?.invoke() ?: true) && !getFlag(flag)
         if (result && updateFlag) {
             setFlag(flag)
         }

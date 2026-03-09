@@ -19,11 +19,11 @@ package com.android.launcher3;
 import static com.android.launcher3.AbstractFloatingView.TYPE_FOLDER;
 import static com.android.launcher3.AbstractFloatingView.TYPE_WIDGET_RESIZE_FRAME;
 import static com.android.launcher3.BubbleTextView.DISPLAY_FOLDER;
+import static com.android.launcher3.Flags.enableCursorDrivenWorkflows;
 import static com.android.launcher3.Flags.enableFileSystemFoldersAsDropTargets;
 import static com.android.launcher3.Flags.enableSystemDragToOtherApps;
 import static com.android.launcher3.Flags.enableTaskbarDragAndDrop;
 import static com.android.launcher3.Flags.injectableModelItems;
-import static com.android.launcher3.Flags.refactorTaskbarUiState;
 import static com.android.launcher3.LauncherAnimUtils.SPRING_LOADED_EXIT_DELAY;
 import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS_PREDICTION;
 import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_DESKTOP;
@@ -45,7 +45,6 @@ import static com.android.launcher3.LauncherState.NORMAL;
 import static com.android.launcher3.LauncherState.SPRING_LOADED;
 import static com.android.launcher3.MotionEventsUtils.isTrackpadMultiFingerSwipe;
 import static com.android.launcher3.Utilities.qsbOnFirstScreen;
-import static com.android.launcher3.Utilities.shouldEnableCursorDrivenWorkflows;
 import static com.android.launcher3.anim.AnimatorListeners.forSuccessCallback;
 import static com.android.launcher3.config.FeatureFlags.FOLDABLE_SINGLE_PAGE;
 import static com.android.launcher3.logging.StatsLogManager.LAUNCHER_STATE_HOME;
@@ -99,6 +98,7 @@ import com.android.launcher3.accessibility.AccessibleDragListenerAdapter;
 import com.android.launcher3.accessibility.WorkspaceAccessibilityHelper;
 import com.android.launcher3.anim.PendingAnimation;
 import com.android.launcher3.apppairs.AppPairIcon;
+import com.android.launcher3.automation.AutomationRepository;
 import com.android.launcher3.celllayout.CellInfo;
 import com.android.launcher3.celllayout.CellLayoutLayoutParams;
 import com.android.launcher3.celllayout.CellPosMapper;
@@ -130,6 +130,7 @@ import com.android.launcher3.logging.StatsLogManager.LauncherEvent;
 import com.android.launcher3.model.data.AppPairInfo;
 import com.android.launcher3.model.data.FolderInfo;
 import com.android.launcher3.model.data.ItemInfo;
+import com.android.launcher3.model.data.ItemInfoWithIcon;
 import com.android.launcher3.model.data.LauncherAppWidgetInfo;
 import com.android.launcher3.model.data.WorkspaceItemInfo;
 import com.android.launcher3.pageindicators.PageIndicator;
@@ -403,19 +404,21 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
 
         mWorkspaceFadeInAdjacentScreens = grid.shouldFadeAdjacentWorkspaceScreens();
 
-        Rect padding = grid.mWorkspaceProfile.getWorkspacePadding();
+        Rect padding = grid.getWorkspaceProfile().getWorkspacePadding();
         setPadding(padding.left, padding.top, padding.right, padding.bottom);
         mInsets.set(insets);
 
         if (mWorkspaceFadeInAdjacentScreens) {
             // In landscape mode the page spacing is set to the default.
-            setPageSpacing(grid.mWorkspaceProfile.getEdgeMarginPx());
+            setPageSpacing(grid.getWorkspaceProfile().getEdgeMarginPx());
         } else {
             // In portrait, we want the pages spaced such that there is no
             // overhang of the previous / next page into the current page viewport.
             // We assume symmetrical padding in portrait mode.
             int maxInsets = Math.max(insets.left, insets.right);
-            int maxPadding = Math.max(grid.mWorkspaceProfile.getEdgeMarginPx(), padding.left + 1);
+            int maxPadding = Math.max(
+                    grid.getWorkspaceProfile().getEdgeMarginPx(), padding.left + 1
+            );
             setPageSpacing(Math.max(maxInsets, maxPadding));
         }
 
@@ -435,7 +438,7 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     }
 
     private void updateCellLayoutMeasures() {
-        Rect padding = mLauncher.getDeviceProfile().mWorkspaceProfile.getCellLayoutPaddingPx();
+        Rect padding = mLauncher.getDeviceProfile().getWorkspaceProfile().getCellLayoutPaddingPx();
         mWorkspaceScreens.forEach(cellLayout -> {
             cellLayout.setPadding(padding.left, padding.top, padding.right, padding.bottom);
             cellLayout.setSpaceBetweenCellLayoutsPx(getPageSpacing() / 4);
@@ -562,12 +565,23 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
             mAccessibilityDragListener.onDragStart(dragObject, options);
         }
         if (!mLauncher.isInState(EDIT_MODE)) {
-            mLauncher.getStateManager().goToState(shouldEnableCursorDrivenWorkflows(getContext())
-                    ? DESKTOP_DRAG_MODE : SPRING_LOADED);
+            mLauncher.getStateManager().goToState(
+                    (enableCursorDrivenWorkflows() && options.isMouseDrag)
+                            ? DESKTOP_DRAG_MODE : SPRING_LOADED);
         }
         mStatsLogManager.logger().withItemInfo(dragObject.dragInfo)
                 .withInstanceId(dragObject.logInstanceId)
                 .log(LauncherEvent.LAUNCHER_ITEM_DRAG_STARTED);
+    }
+
+    @Override
+    public void onDragEnterWindow(DropTarget.DragObject dragObject, DragOptions options) {
+        // No-op
+    }
+
+    @Override
+    public void onDragExitWindow(DropTarget.DragObject dragObject, DragOptions options) {
+        // No-op
     }
 
     private boolean isTwoPanelEnabled() {
@@ -1418,9 +1432,7 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                 mLauncher.onOverlayVisibilityChanged(false);
             }
         }
-        if (refactorTaskbarUiState()) {
-            mLauncherUiState.setOverlayShown(mOverlayShown);
-        }
+        mLauncherUiState.setOverlayShown(mOverlayShown);
         int count = mOverlayCallbacks.size();
         for (int i = 0; i < count; i++) {
             mOverlayCallbacks.get(i).onOverlayScrollChanged(mOverlayProgress);
@@ -2778,7 +2790,9 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     }
 
     private void handleLauncherStateForDrag(DragObject d) {
-        if (!shouldEnableCursorDrivenWorkflows(getContext())) {
+        // Only mouse drag should transition between SPRING_LOADED and DESKTOP_DRAG_MODE when
+        // dragging near the screen edge.
+        if (!enableCursorDrivenWorkflows() || !mDragController.isMouseDrag()) {
             return;
         }
         if (!mLauncher.isInState(SPRING_LOADED) && !mLauncher.isInState(DESKTOP_DRAG_MODE)) {
@@ -3097,6 +3111,9 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         }
 
         ItemInfo info = d.dragInfo;
+        if (info instanceof ItemInfoWithIcon iiwi) {
+            iiwi.checkAndApplyAutomationFlag(AutomationRepository.INSTANCE.get(getContext()));
+        }
         int spanX = info.spanX;
         int spanY = info.spanY;
         if (mDragInfo != null) {
@@ -3309,7 +3326,7 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         if (info.itemType == LauncherSettings.Favorites.ITEM_TYPE_APPWIDGET) {
             DeviceProfile profile = mLauncher.getDeviceProfile();
             if (finalView instanceof NavigableAppWidgetHostView) {
-                Rect widgetPadding = profile.getWorkspaceIconProfile().getWidgetPadding();
+                Rect widgetPadding = profile.getWorkspaceProfile().getWidgetPadding();
                 r.left -= widgetPadding.left;
                 r.right += widgetPadding.right;
                 r.top -= widgetPadding.top;

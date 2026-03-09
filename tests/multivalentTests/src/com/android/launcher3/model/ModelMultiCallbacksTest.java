@@ -42,9 +42,9 @@ import com.android.launcher3.LauncherModel;
 import com.android.launcher3.model.BgDataModel.Callbacks;
 import com.android.launcher3.model.data.AppInfo;
 import com.android.launcher3.model.data.WorkspaceData;
-import com.android.launcher3.testutil.rule.LayoutResource;
 import com.android.launcher3.util.Executors;
 import com.android.launcher3.util.LauncherLayoutBuilder;
+import com.android.launcher3.util.ModelTestExtensions;
 import com.android.launcher3.util.PackageUserKey;
 import com.android.launcher3.util.SandboxApplication;
 import com.android.launcher3.util.TestUtil;
@@ -73,7 +73,6 @@ public class ModelMultiCallbacksTest {
     public LimitDevicesRule mlimitDevicesRule = new LimitDevicesRule();
 
     @Rule public SandboxApplication mContext = new SandboxApplication().withModelDependency();
-    @Rule public LayoutResource mLayoutProvider = new LayoutResource(mContext);
 
     @After
     public void tearDown() throws Exception {
@@ -114,7 +113,7 @@ public class ModelMultiCallbacksTest {
         assertNull(cb2.mItems);
 
         // Reloading only loads registered callbacks
-        getModel().startLoader();
+        getModel().startLoader("testTwoCallbacks_loadedTogether");
         waitForLoaderAndTempMainThread();
         cb1.verifyItemsBound(3);
         assertNull(cb2.mItems);
@@ -173,7 +172,7 @@ public class ModelMultiCallbacksTest {
         for (int i = 0; i < pageCount; i++) {
             builder.atWorkspace(1, 1, i).putApp(TEST_PACKAGE, TEST_PACKAGE);
         }
-        mLayoutProvider.set(builder);
+        ModelTestExtensions.setModelLayout(mContext, builder);
     }
 
     private LauncherModel getModel() {

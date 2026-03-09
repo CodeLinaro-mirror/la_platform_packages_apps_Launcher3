@@ -20,10 +20,10 @@ import android.content.Intent
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.service.personalcontext.hint.BundleHint
+import android.service.personalcontext.hint.ContentCaptureConversationEvent
+import android.service.personalcontext.hint.ContentCaptureConversationHint
 import android.service.personalcontext.hint.ContextHint
 import android.service.personalcontext.hint.ContextHintWithSignature
-import android.service.personalcontext.hint.ConversationEvent
-import android.service.personalcontext.hint.ConversationHint
 import android.service.personalcontext.insight.ActionableInsight
 import android.service.personalcontext.insight.ContextInsight
 import android.service.personalcontext.insight.DisplayInsight
@@ -36,6 +36,8 @@ import com.android.launcher3.taskbar.rules.TaskbarUnitTestRule
 import com.android.launcher3.taskbar.rules.TaskbarWindowSandboxContext
 import com.android.quickstep.cuebar.data.ActionModel
 import com.android.quickstep.cuebar.data.repository.AmbientCueRepositoryImpl
+import com.android.quickstep.cuebar.data.repository.AmbientCueRepositoryImpl.Companion.EXTRA_ENABLED_WITH_IME_VISIBLE
+import com.android.quickstep.cuebar.data.repository.AmbientCueRepositoryImpl.Companion.IME_VISIBILITY_HINT_TYPE
 import com.android.quickstep.cuebar.data.repository.AmbientCueRepositoryImpl.Companion.MA_ACTION_TYPE_NAME
 import com.android.quickstep.cuebar.data.repository.AmbientCueRepositoryImpl.Companion.MR_ACTION_TYPE_NAME
 import com.android.quickstep.cuebar.data.repository.AmbientCueRepositoryImpl.Companion.RENDER_IN_CUE_BAR
@@ -177,11 +179,23 @@ class AmbientCueRepositoryTest {
         return actionModel
     }
 
+    private fun createBundleHint(renderInCueBar: Boolean): BundleHint {
+        val bundle = Bundle().apply { putBoolean(RENDER_IN_CUE_BAR, renderInCueBar) }
+        return mock(BundleHint::class.java).apply { `when`(dataBundle).thenReturn(bundle) }
+    }
+
+    private fun createImeVisibilityHint(enabledWithImeVisible: Boolean): BundleHint {
+        val bundle =
+            Bundle().apply { putBoolean(EXTRA_ENABLED_WITH_IME_VISIBLE, enabledWithImeVisible) }
+        return mock(BundleHint::class.java).apply {
+            `when`(dataBundle).thenReturn(bundle)
+            `when`(hintTypeName).thenReturn(IME_VISIBILITY_HINT_TYPE)
+        }
+    }
+
     @Test
     fun mapInsightToActions_bundleHint_callsMapContextInsightToAction() {
-        val bundle = Bundle().apply { putBoolean(RENDER_IN_CUE_BAR, true) }
-        val bundleHint =
-            mock(BundleHint::class.java).apply { `when`(dataBundle).thenReturn(bundle) }
+        val bundleHint = createBundleHint(true)
         val insight = mockInsight(bundleHint)
         doReturn(listOf(mock(ActionModel::class.java)))
             .`when`(repository)
@@ -196,8 +210,9 @@ class AmbientCueRepositoryTest {
     @Test
     fun mapInsightToActions_conversationHint_callsMapContextInsightToAction() {
         val conversationHint =
-            mock(ConversationHint::class.java).apply {
-                `when`(conversationEvent).thenReturn(mock(ConversationEvent::class.java))
+            mock(ContentCaptureConversationHint::class.java).apply {
+                `when`(conversationEvent)
+                    .thenReturn(mock(ContentCaptureConversationEvent::class.java))
             }
         val insight = mockInsight(conversationHint)
         doReturn(listOf(mock(ActionModel::class.java)))
@@ -214,8 +229,9 @@ class AmbientCueRepositoryTest {
     fun mapContextInsightToAction_actionableInsight_remoteAction_createsMAModel() {
         val insight = mockActionableInsight()
         val conversationHint =
-            mock(ConversationHint::class.java).apply {
-                `when`(conversationEvent).thenReturn(mock(ConversationEvent::class.java))
+            mock(ContentCaptureConversationHint::class.java).apply {
+                `when`(conversationEvent)
+                    .thenReturn(mock(ContentCaptureConversationEvent::class.java))
             }
         val result = repository.mapContextInsightToAction(insight, conversationHint)
         val actionModel = getSingleActionModel(result, MA_ACTION_TYPE_NAME)
@@ -231,8 +247,9 @@ class AmbientCueRepositoryTest {
     fun mapContextInsightToAction_displayInsight_conversationHint_createsMRModel() {
         val insight = mockDisplayInsight()
         val conversationHint =
-            mock(ConversationHint::class.java).apply {
-                `when`(conversationEvent).thenReturn(mock(ConversationEvent::class.java))
+            mock(ContentCaptureConversationHint::class.java).apply {
+                `when`(conversationEvent)
+                    .thenReturn(mock(ContentCaptureConversationEvent::class.java))
             }
         val result = repository.mapContextInsightToAction(insight, conversationHint)
         val actionModel = getSingleActionModel(result, MR_ACTION_TYPE_NAME)
@@ -268,8 +285,9 @@ class AmbientCueRepositoryTest {
                 .addInsight(nestedCollection)
                 .build()
         val conversationHint =
-            mock(ConversationHint::class.java).apply {
-                `when`(conversationEvent).thenReturn(mock(ConversationEvent::class.java))
+            mock(ContentCaptureConversationHint::class.java).apply {
+                `when`(conversationEvent)
+                    .thenReturn(mock(ContentCaptureConversationEvent::class.java))
             }
 
         val result = repository.mapContextInsightToAction(rootCollection, conversationHint)
@@ -277,6 +295,67 @@ class AmbientCueRepositoryTest {
         assertThat(result).hasSize(2)
         assertThat(result[0].actionType).isEqualTo(MA_ACTION_TYPE_NAME)
         assertThat(result[1].actionType).isEqualTo(MR_ACTION_TYPE_NAME)
+    }
+
+    @Test
+    fun mapContextInsightToAction_flagSetToTrue_setsIsEnabledWithImeVisibleTrue() {
+        val renderHint = createBundleHint(true)
+        val imeHint = createImeVisibilityHint(true)
+        val insightWithIme = mockActionableInsight()
+        val renderHintWithSignature =
+            mock(ContextHintWithSignature::class.java).apply {
+                `when`(contextHint).thenReturn(renderHint)
+            }
+        val imeHintWithSignature =
+            mock(ContextHintWithSignature::class.java).apply {
+                `when`(contextHint).thenReturn(imeHint)
+            }
+        `when`(insightWithIme.originHints)
+            .thenReturn(setOf(renderHintWithSignature, imeHintWithSignature))
+
+        val resultWithIme = repository.mapInsightToActions(insightWithIme)
+
+        assertThat(resultWithIme).hasSize(1)
+        assertThat(resultWithIme[0].isEnabledWithImeVisible).isTrue()
+    }
+
+    @Test
+    fun mapContextInsightToAction_flagSetToFalse_setsIsEnabledWithImeVisibleFalse() {
+        val renderHint = createBundleHint(true)
+        val imeHint = createImeVisibilityHint(false)
+        val insightWithoutIme = mockActionableInsight()
+        val renderHintWithSignature =
+            mock(ContextHintWithSignature::class.java).apply {
+                `when`(contextHint).thenReturn(renderHint)
+            }
+        val imeHintWithSignature =
+            mock(ContextHintWithSignature::class.java).apply {
+                `when`(contextHint).thenReturn(imeHint)
+            }
+        `when`(insightWithoutIme.originHints)
+            .thenReturn(setOf(renderHintWithSignature, imeHintWithSignature))
+
+        val resultWithoutIme = repository.mapInsightToActions(insightWithoutIme)
+
+        assertThat(resultWithoutIme).hasSize(1)
+        assertThat(resultWithoutIme[0].isEnabledWithImeVisible).isFalse()
+    }
+
+    @Test
+    fun mapContextInsightToAction_noFlag_setsIsEnabledWithImeVisibleFalse() {
+        val renderHint = createBundleHint(true)
+        // No IME visibility hint provided
+        val insightDefaultIme = mockActionableInsight()
+        val renderHintWithSignature =
+            mock(ContextHintWithSignature::class.java).apply {
+                `when`(contextHint).thenReturn(renderHint)
+            }
+        `when`(insightDefaultIme.originHints).thenReturn(setOf(renderHintWithSignature))
+
+        val resultDefaultIme = repository.mapInsightToActions(insightDefaultIme)
+
+        assertThat(resultDefaultIme).hasSize(1)
+        assertThat(resultDefaultIme[0].isEnabledWithImeVisible).isFalse()
     }
 
     private companion object {

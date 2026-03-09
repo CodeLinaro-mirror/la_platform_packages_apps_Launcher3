@@ -17,8 +17,7 @@ package com.android.launcher3.testing;
 
 import static androidx.lifecycle.Lifecycle.State.DESTROYED;
 
-import static com.android.launcher3.Flags.enableFallbackOverviewInWindow;
-import static com.android.launcher3.Flags.enableLauncherOverviewInWindow;
+import static com.android.launcher3.Flags.enableTaskbarUiThread;
 import static com.android.launcher3.InvariantDeviceProfile.TYPE_PHONE;
 import static com.android.launcher3.LauncherPrefs.FIXED_LANDSCAPE_MODE;
 import static com.android.launcher3.allapps.AllAppsStore.DEFER_UPDATES_TEST;
@@ -26,6 +25,9 @@ import static com.android.launcher3.config.FeatureFlags.FOLDABLE_SINGLE_PAGE;
 import static com.android.launcher3.testing.shared.TestProtocol.TEST_INFO_RESPONSE_FIELD;
 import static com.android.launcher3.util.Executors.MAIN_EXECUTOR;
 import static com.android.launcher3.util.Executors.MODEL_EXECUTOR;
+import static com.android.launcher3.util.Executors.getTaskbarUiThread;
+import static com.android.launcher3.util.OverviewReleaseFlags.enableFallbackOverviewInWindow;
+import static com.android.launcher3.util.OverviewReleaseFlags.enableLauncherOverviewInWindow;
 
 import android.app.Activity;
 import android.app.Application;
@@ -67,7 +69,6 @@ import com.android.launcher3.icons.ClockDrawableWrapper;
 import com.android.launcher3.testing.shared.TestProtocol;
 import com.android.launcher3.util.ActivityLifecycleCallbacksAdapter;
 import com.android.launcher3.util.TaskbarModeUtil;
-import com.android.launcher3.widget.picker.WidgetsFullSheet;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -153,6 +154,9 @@ public class TestInformationHandler {
             }
 
             case TestProtocol.REQUEST_IS_LAUNCHER_INITIALIZED: {
+                if (enableTaskbarUiThread()) {
+                    getFromExecutorSync(getTaskbarUiThread(),  Bundle::new);
+                }
                 return getUIProperty(Bundle::putBoolean, t -> isLauncherInitialized(), () -> true);
             }
 
@@ -181,11 +185,6 @@ public class TestInformationHandler {
                         l -> l.getAppsView().getActiveRecyclerView().computeVerticalScrollOffset());
             }
 
-            case TestProtocol.REQUEST_WIDGETS_SCROLL_Y: {
-                return getLauncherUIProperty(Bundle::putInt,
-                        l -> WidgetsFullSheet.getWidgetsView(l).computeVerticalScrollOffset());
-            }
-
             case TestProtocol.REQUEST_TARGET_INSETS: {
                 return getUIProperty(Bundle::putParcelable, insets -> Insets.max(
                         insets.getSystemGestureInsets(),
@@ -201,7 +200,7 @@ public class TestInformationHandler {
                 response.putInt(
                         TestProtocol.TEST_INFO_RESPONSE_FIELD,
                         mPrimaryDeviceProfile
-                                .getWorkspaceIconProfile()
+                                .getWorkspaceProfile()
                                 .getCellLayoutBorderSpacePx()
                                 .y);
                 return response;
@@ -457,7 +456,7 @@ public class TestInformationHandler {
                     MODEL_EXECUTOR.execute(() -> {
                         LauncherModel model = LauncherAppState.getInstance(mContext).getModel();
                         model.getModelDbController().createEmptyDB();
-                        MAIN_EXECUTOR.execute(model::forceReload);
+                        MAIN_EXECUTOR.execute(() -> model.forceReload("REQUEST_REINITIALIZE_DATA"));
                     });
                     return response;
                 } finally {
@@ -472,7 +471,7 @@ public class TestInformationHandler {
                         LauncherModel model = LauncherAppState.getInstance(mContext).getModel();
                         model.getModelDbController().createEmptyDB();
                         model.getModelDbController().clearEmptyDbFlag();
-                        MAIN_EXECUTOR.execute(model::forceReload);
+                        MAIN_EXECUTOR.execute(() -> model.forceReload("REQUEST_CLEAR_DATA"));
                     });
                     return response;
                 } finally {

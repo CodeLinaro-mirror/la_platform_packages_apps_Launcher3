@@ -40,6 +40,8 @@ import androidx.annotation.Nullable;
 import com.android.launcher3.ShortcutAndWidgetContainer.TranslationProvider;
 import com.android.launcher3.celllayout.CellLayoutLayoutParams;
 import com.android.launcher3.dagger.LauncherComponentProvider;
+import com.android.launcher3.dragndrop.SystemDragItemInfo;
+import com.android.launcher3.homescreenfiles.HomeScreenFilesUtilsKt;
 import com.android.launcher3.model.data.ItemInfo;
 import com.android.launcher3.model.data.LauncherAppWidgetInfo;
 import com.android.launcher3.util.HorizontalInsettableView;
@@ -157,7 +159,7 @@ public class Hotseat extends CellLayout implements Insettable {
         final ShortcutAndWidgetContainer shortcutAndWidgetContainer = getShortcutsAndWidgets();
         return shortcutAndWidgetContainer != null
                 && shortcutAndWidgetContainer.getVisibility() == View.VISIBLE
-                && !isDragWidget(dragObject);
+                && isSupportedDrag(dragObject);
     }
 
     public void resetLayout(boolean hasVerticalHotseat) {
@@ -175,7 +177,7 @@ public class Hotseat extends CellLayout implements Insettable {
                 if (mQsb instanceof HorizontalInsettableView) {
                     HorizontalInsettableView insettableQsb = (HorizontalInsettableView) mQsb;
                     final float insetFraction =
-                            (float) dp.getWorkspaceIconProfile().getIconSizePx()
+                            (float) dp.getWorkspaceProfile().getIconSizePx()
                                     / dp.getHotseatProfile().getQsbWidth();
                     // post this to the looper so that QSB has a chance to redraw itself, e.g.
                     // after device rotation
@@ -241,7 +243,7 @@ public class Hotseat extends CellLayout implements Insettable {
         if (mQsb instanceof HorizontalInsettableView horizontalInsettableQsb) {
             final float currentInsetFraction = horizontalInsettableQsb.getHorizontalInsets();
             final float targetInsetFraction = shouldAdjustQsb
-                    ? (float) dp.getWorkspaceIconProfile().getIconSizePx() / dp.getHotseatProfile()
+                    ? (float) dp.getWorkspaceProfile().getIconSizePx() / dp.getHotseatProfile()
                     .getQsbWidth()
                     : 0;
             ValueAnimator qsbAnimator =
@@ -349,7 +351,7 @@ public class Hotseat extends CellLayout implements Insettable {
         int qsbMeasuredWidth = mQsb.getMeasuredWidth();
         int left;
         DeviceProfile dp = mActivity.getDeviceProfile();
-        if (dp.isQsbInline) {
+        if (dp.getHotseatProfile().isQsbInline()) {
             int qsbSpace = dp.getHotseatProfile().getBorderSpace();
             left = Utilities.isRtl(getResources()) ? r - getPaddingRight() + qsbSpace
                     : l + getPaddingLeft() - qsbMeasuredWidth - qsbSpace;
@@ -426,9 +428,14 @@ public class Hotseat extends CellLayout implements Insettable {
         );
     }
 
-    private boolean isDragWidget(DropTarget.DragObject d) {
-        return (d.dragInfo instanceof LauncherAppWidgetInfo
-                || d.dragInfo instanceof PendingAddWidgetInfo);
+    // TODO(b/479881252): Determine whether it still makes sense to disallow all instances of
+    //  `SystemDragItemInfo` once `SystemDragController` is supported in all `ActivityContext`s. The
+    //  current assumption is that `SystemDragItemInfo` indicates files dragged from another app.
+    private boolean isSupportedDrag(DropTarget.DragObject d) {
+        return !(HomeScreenFilesUtilsKt.isFileSystemItem(d.dragInfo)
+                || d.dragInfo instanceof LauncherAppWidgetInfo
+                || d.dragInfo instanceof PendingAddWidgetInfo
+                || d.dragInfo instanceof SystemDragItemInfo);
     }
 
 }

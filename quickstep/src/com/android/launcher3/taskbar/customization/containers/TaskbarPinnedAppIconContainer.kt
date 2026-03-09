@@ -164,16 +164,18 @@ class TaskbarPinnedAppIconContainer(context: Context) :
             val itemView = itemViewFactory.getView(item, index)
             itemView.setPadding(taskbarIconViewPadding)
 
+            val lp = getLayoutParams(index, itemCount)
             if (!forceUpdate && item.isSameItem(itemView.tag) && itemView in this) {
                 // Might have been wrapped in TaskItemInfo by recents update.
                 itemView.tag = item
+                itemView.layoutParams = lp
                 return@forEachIcon
             }
 
             if (itemView !in this) {
-                addView(itemView, getLayoutParams(index, itemCount))
+                addView(itemView, lp)
             } else {
-                itemView.layoutParams = getLayoutParams(index, itemCount)
+                itemView.layoutParams = lp
             }
 
             if (itemView is FolderIcon) {
@@ -308,14 +310,15 @@ class TaskbarPinnedAppIconContainer(context: Context) :
         addView(dropTargetGhostView, min(insertionIndex, childCount), lp)
     }
 
-    fun updateItemViewVisibilityForDragState(itemView: View, isDragged: Boolean) {
+    fun updateItemViewVisibilityForDragState(itemView: View, isDragged: Boolean): Boolean {
         val indexOfDraggedView = indexOfChild(itemView)
         if (indexOfDraggedView < 0) {
             indexOfChildHiddenForDrag = -1
-            return
+            return false
         }
         indexOfChildHiddenForDrag = if (isDragged) indexOfDraggedView else -1
         itemView.visibility = if (isDragged) GONE else VISIBLE
+        return true
     }
 
     /** Removes the ghost view and restores the original item if it was hidden. */

@@ -24,7 +24,7 @@ import androidx.test.filters.LargeTest
 import com.android.launcher3.util.LauncherLayoutBuilder
 import com.android.launcher3.util.TestConstants.AppNames.TEST_APP_NAME
 import com.android.launcher3.util.TestUtil
-import com.android.launcher3.util.ui.ActivityStartUtils.startAppFast
+import com.android.launcher3.util.rule.ScreenRecordRule.ScreenRecord
 import com.android.wm.shell.Flags
 import org.junit.After
 import org.junit.Assume
@@ -84,6 +84,7 @@ class TaplTestTaskbarIconDrag : AbstractQuickStepTest() {
     }
 
     @Test
+    @ScreenRecord
     fun testAppIconDragOnOverviewFromTaskBarAllAppsToBubbleBar() {
         val overview = mLauncher.workspace.switchToOverview()
         // test right drop target

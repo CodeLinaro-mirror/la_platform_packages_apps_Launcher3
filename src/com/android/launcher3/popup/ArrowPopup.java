@@ -126,7 +126,7 @@ public abstract class ArrowPopup<T extends Context & ActivityContext>
     // The rect string of the view that the arrow is attached to, in screen reference frame.
     protected int mArrowColor;
 
-    protected final float mElevation;
+    protected float mElevation;
 
     // Tag for Views that have children that will need to be iterated to add styling.
     private final String mIterateChildrenTag;
@@ -256,7 +256,7 @@ public abstract class ArrowPopup<T extends Context & ActivityContext>
                 mlp.bottomMargin = 0;
 
                 if (colors != null && isShortcutContainer(view)) {
-                    setChildColor(view, colors[0], colorAnimator);
+                    setChildColor(view.getBackground(), colors[0], colorAnimator);
                     mArrowColor = colors[0];
                 }
 
@@ -280,7 +280,7 @@ public abstract class ArrowPopup<T extends Context & ActivityContext>
                     }
                 }
 
-                setChildColor(view, backgroundColor, colorAnimator);
+                setChildColor(view.getBackground(), backgroundColor, colorAnimator);
             }
         }
 
@@ -305,8 +305,7 @@ public abstract class ArrowPopup<T extends Context & ActivityContext>
     /**
      * Sets the background color of the child.
      */
-    protected void setChildColor(View view, int color, AnimatorSet animatorSetOut) {
-        Drawable bg = view.getBackground();
+    protected void setChildColor(Drawable bg, int color, AnimatorSet animatorSetOut) {
         if (bg instanceof GradientDrawable) {
             GradientDrawable gd = (GradientDrawable) bg.mutate();
             int oldColor = ((GradientDrawable) bg).getColor().getDefaultColor();

@@ -38,6 +38,9 @@ import com.android.launcher3.util.ModelTestExtensions.loadModelSync
 import com.android.launcher3.util.ModelTestExtensions.setEmptyModelLayout
 import com.android.launcher3.util.RoboApiWrapper.grantWidgetBindPermissionRule
 import com.android.launcher3.util.WidgetUtils
+import com.android.launcher3.util.rule.TestStabilityRule
+import com.android.launcher3.util.rule.TestStabilityRule.DesktopStability
+import com.android.launcher3.util.rule.TestStabilityRule.LOCAL
 import com.android.launcher3.widgetpicker.listeners.WidgetPickerAddItemListener
 import com.android.launcher3.widgetpicker.shared.model.WidgetInfo
 import com.google.common.truth.Truth.assertThat
@@ -58,6 +61,7 @@ class AddWidgetConfigTest {
     @get:Rule val limitDevicesRule = LimitDevicesRule()
     @get:Rule var grantWidgetRule: TestRule = grantWidgetBindPermissionRule()
     @get:Rule var launcherActivity = LauncherActivityScenarioRule<Launcher>()
+    @get:Rule val testStabilityRule = TestStabilityRule()
 
     private lateinit var widgetInfo: LauncherAppWidgetProviderInfo
     private lateinit var appWidgetManager: AppWidgetManager
@@ -76,12 +80,14 @@ class AddWidgetConfigTest {
 
     @Test
     @Throws(Throwable::class)
+    @DesktopStability(flavors = LOCAL, bug = 486279619)
     fun testWidgetConfig() {
         runTest(acceptConfig = true)
     }
 
     @Test
     @Throws(Throwable::class)
+    @DesktopStability(flavors = LOCAL, bug = 486279619)
     fun testConfigCancelled() {
         runTest(acceptConfig = false)
     }

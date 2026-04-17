@@ -31,8 +31,10 @@ import com.android.launcher3.dagger.StaticObjectModule
 import com.android.launcher3.dagger.TaskOverlayModule
 import com.android.launcher3.dagger.WidgetModule
 import com.android.launcher3.dagger.WindowManagerProxyModule
+import com.android.launcher3.organizer.generator.GeneratorModule
 import com.android.launcher3.util.dagger.LauncherExecutorsModule
 import com.android.launcher3.widgetpicker.NoOpWidgetPickerModule
+import com.android.launcher3.workspacefunctions.WorkspaceFunctionsModule
 import dagger.Binds
 import dagger.Module
 
@@ -59,6 +61,8 @@ abstract class FakePrefsModule {
             SettingsModule::class,
             AutomationModule::class,
             TaskOverlayModule::class,
+            WorkspaceFunctionsModule::class,
+            GeneratorModule::class,
         ]
 )
 class CommonModulesForTest

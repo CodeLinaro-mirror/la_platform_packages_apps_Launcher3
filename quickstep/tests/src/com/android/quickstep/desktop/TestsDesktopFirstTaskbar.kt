@@ -27,11 +27,13 @@ import androidx.test.filters.LargeTest
 import androidx.test.platform.app.InstrumentationRegistry
 import com.android.launcher3.util.LauncherModelHelper
 import com.android.launcher3.util.rule.SetPropRule
+import com.android.launcher3.util.rule.TestStabilityRule
+import com.android.launcher3.util.rule.TestStabilityRule.DesktopStability
+import com.android.launcher3.util.rule.TestStabilityRule.LOCAL
 import com.android.quickstep.integration.BaseTaskbarIntegrationTest
 import com.android.quickstep.taskbar.util.IntegrationNavigationModeSwitchRule
 import com.android.quickstep.taskbar.util.IntegrationNavigationModeSwitchRule.NavigationModeSwitch
 import com.android.quickstep.taskbar.util.IntegrationTaskbarModeSwitchRule.Mode
-import com.android.window.flags.Flags
 import com.android.wm.shell.shared.desktopmode.DesktopModeStatus
 import org.junit.After
 import org.junit.Assume
@@ -50,6 +52,8 @@ class TestsDesktopFirstTaskbar : BaseTaskbarIntegrationTest() {
     var mSetPropRule: SetPropRule =
         SetPropRule(DesktopModeStatus.ENTER_DESKTOP_BY_DEFAULT_ON_FREEFORM_DISPLAY_SYS_PROP, "true")
 
+    @get:Rule val testStabilityRule = TestStabilityRule()
+
     var mOriginalWindowingMode = WindowConfiguration.WINDOWING_MODE_UNDEFINED
 
     var originalTaskbarMode: Mode = Mode.TRANSIENT
@@ -62,7 +66,6 @@ class TestsDesktopFirstTaskbar : BaseTaskbarIntegrationTest() {
         mOriginalWindowingMode =
             setDisplayWindowingMode(WindowConfiguration.WINDOWING_MODE_FREEFORM)
         super.setup()
-        Assume.assumeTrue(Flags.enterDesktopByDefaultOnFreeformDisplays())
         Assume.assumeTrue(
             "Ignoring test because device does not support desktop mode",
             DesktopModeStatus.canEnterDesktopMode(
@@ -96,6 +99,7 @@ class TestsDesktopFirstTaskbar : BaseTaskbarIntegrationTest() {
 
     @Test
     @NavigationModeSwitch
+    @DesktopStability(flavors = LOCAL, bug = 486279458)
     fun testTaskbarOnHome() {
         // Go home - taskbar should be visible in desktop-first display context.
         uiDevice.pressHome()
@@ -121,6 +125,7 @@ class TestsDesktopFirstTaskbar : BaseTaskbarIntegrationTest() {
 
     @Test
     @NavigationModeSwitch(mode = IntegrationNavigationModeSwitchRule.Mode.THREE_BUTTON)
+    @DesktopStability(flavors = LOCAL, bug = 486279458)
     fun testTaskbarOnHome_three_buttons() {
         testTaskbarOnHome()
     }

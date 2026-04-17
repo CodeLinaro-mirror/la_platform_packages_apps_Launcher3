@@ -20,20 +20,18 @@ import static android.app.WindowConfiguration.ACTIVITY_TYPE_HOME;
 import static android.app.WindowConfiguration.ACTIVITY_TYPE_RECENTS;
 import static android.app.WindowConfiguration.WINDOWING_MODE_FREEFORM;
 import static android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN;
-import static android.app.WindowConfiguration.WINDOWING_MODE_MULTI_WINDOW;
 import static android.content.Intent.ACTION_CHOOSER;
 import static android.content.Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS;
 import static android.view.Display.DEFAULT_DISPLAY;
 import static android.view.Display.INVALID_DISPLAY;
 
+import static com.android.launcher3.statehandlers.DesktopVisibilityController.INACTIVE_DESK_ID;
 import static com.android.launcher3.util.SplitConfigurationOptions.STAGE_POSITION_TOP_OR_LEFT;
 import static com.android.launcher3.util.SplitConfigurationOptions.STAGE_TYPE_A;
-import static com.android.wm.shell.Flags.enableShellTopTaskTracking;
 import static com.android.wm.shell.Flags.enableFlexibleSplit;
-import static com.android.wm.shell.Flags.sendBubbleRootTaskIdToLauncher;
+import static com.android.wm.shell.Flags.enableShellTopTaskTracking;
 import static com.android.wm.shell.shared.GroupedTaskInfo.TYPE_DESK;
 import static com.android.wm.shell.shared.GroupedTaskInfo.TYPE_SPLIT;
-import static com.android.launcher3.statehandlers.DesktopVisibilityController.INACTIVE_DESK_ID;
 
 import android.app.ActivityManager.RunningTaskInfo;
 import android.app.TaskInfo;
@@ -114,17 +112,11 @@ public class TopTaskTracker extends ISplitScreenListener.Stub implements TaskSta
             mSideStagePosition.stageType = SplitConfigurationOptions.STAGE_TYPE_SIDE;
 
             TaskStackChangeListeners.getInstance().registerTaskStackListener(this);
-            systemUiProxy.registerSplitScreenListener(this);
+            tracker.addCloseable(() ->
+                    TaskStackChangeListeners.getInstance().unregisterTaskStackListener(this));
+
+            tracker.addCloseable(systemUiProxy.getSplitScreenListeners().register(this));
         }
-
-        tracker.addCloseable(() -> {
-            if (enableShellTopTaskTracking()) {
-                return;
-            }
-
-            TaskStackChangeListeners.getInstance().unregisterTaskStackListener(this);
-            systemUiProxy.unregisterSplitScreenListener(this);
-        });
 
         mContext = context;
         mDesktopVisibilityController = desktopVisibilityController;
@@ -377,7 +369,7 @@ public class TopTaskTracker extends ISplitScreenListener.Stub implements TaskSta
                     info -> ExternalDisplaysKt.getSafeDisplayId(info) == displayId);
             taskStream = taskStream.takeWhile(
                     taskInfo -> !DesksUtils.isDesktopWallpaperTask(taskInfo));
-            taskStream = taskStream.filter(taskInfo -> !isBubbleTask(taskInfo));
+            taskStream = taskStream.filter(taskInfo -> !BubbleHelper.isBubbleTask(taskInfo));
 
             return new CachedTaskInfo(taskStream.toList(), mContext, displayId, activeDeskId);
         }
@@ -391,16 +383,6 @@ public class TopTaskTracker extends ISplitScreenListener.Stub implements TaskSta
     private static boolean isRecentsTask(TaskInfo task) {
         return task != null && task.configuration.windowConfiguration
                 .getActivityType() == ACTIVITY_TYPE_RECENTS;
-    }
-
-    private static boolean isBubbleTask(TaskInfo task) {
-        if (sendBubbleRootTaskIdToLauncher()) {
-            return BubbleHelper.isBubbleTask(task);
-        }
-        if (task == null) return false;
-        if (task.isAppBubble) return true;
-        return task.getWindowingMode() == WINDOWING_MODE_MULTI_WINDOW
-                && task.configuration.windowConfiguration.isAlwaysOnTop();
     }
 
     /**

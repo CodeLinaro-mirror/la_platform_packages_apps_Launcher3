@@ -43,6 +43,7 @@ import com.android.launcher3.dagger.WindowManagerProxyModule
 import com.android.launcher3.graphics.theme.ThemePreference
 import com.android.launcher3.model.ModelInitializer
 import com.android.launcher3.model.data.LoaderParams
+import com.android.launcher3.organizer.generator.GeneratorModule
 import com.android.launcher3.provider.LauncherDbUtils.selectionForWorkspaceScreen
 import com.android.launcher3.qsb.OseWidgetManager
 import com.android.launcher3.util.SandboxContext
@@ -52,7 +53,7 @@ import com.android.launcher3.widget.LauncherWidgetHolder.WidgetHolderFactory
 import com.android.launcher3.widget.LocalColorExtractor
 import com.android.launcher3.widget.util.WidgetSizeHandler
 import com.android.launcher3.widgetpicker.NoOpWidgetPickerModule
-import com.android.systemui.shared.Flags
+import com.android.launcher3.workspacefunctions.WorkspaceFunctionsModule
 import dagger.Binds
 import dagger.BindsInstance
 import dagger.Component
@@ -113,7 +114,7 @@ constructor(
         // cause either launcher appcomponent or preview to app component to go out of sync.
         builder.bindOseWidgetManager(base.appComponent.oseWidgetManager)
 
-        if (layoutXml.isNullOrEmpty() || !Flags.extendibleThemeManager()) {
+        if (layoutXml.isNullOrEmpty()) {
             mDbDir = null
             initDaggerComponent(builder.bindWidgetsFactory(base.appComponent.widgetHolderFactory))
         } else {
@@ -208,6 +209,8 @@ constructor(
                 SettingsModule::class,
                 AutomationModule::class,
                 TaskOverlayModule::class,
+                WorkspaceFunctionsModule::class,
+                GeneratorModule::class,
             ]
     )
     interface PreviewAppComponent : LauncherAppComponent {

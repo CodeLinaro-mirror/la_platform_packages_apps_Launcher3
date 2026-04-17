@@ -29,6 +29,7 @@ import static com.android.app.animation.Interpolators.DECELERATE_2;
 import static com.android.app.animation.Interpolators.EMPHASIZED_DECELERATE;
 import static com.android.app.animation.Interpolators.LINEAR;
 import static com.android.app.animation.Interpolators.clampToProgress;
+import static com.android.internal.jank.Cuj.CUJ_LAUNCHER_RECENTS_TO_HOME;
 import static com.android.launcher3.AbstractFloatingView.TYPE_REBIND_SAFE;
 import static com.android.launcher3.BaseActivity.STATE_HANDLER_INVISIBILITY_FLAGS;
 import static com.android.launcher3.Flags.enableLowResThumbnailPreloading;
@@ -67,7 +68,6 @@ import static com.android.quickstep.views.OverviewActionsView.HIDDEN_SPLIT_SELEC
 import static com.android.quickstep.views.RecentsViewUtils.DESK_EXPLODE_PROGRESS;
 import static com.android.quickstep.views.TaskView.SPLIT_ALPHA;
 import static com.android.wm.shell.Flags.enableCreateAnyBubble;
-import static com.android.wm.shell.Flags.sendBubbleRootTaskIdToLauncher;
 
 import static java.util.Objects.requireNonNull;
 
@@ -174,6 +174,7 @@ import com.android.launcher3.util.SplitConfigurationOptions.StagePosition;
 import com.android.launcher3.util.TraceHelper;
 import com.android.launcher3.util.TranslateEdgeEffect;
 import com.android.launcher3.util.VibratorWrapper;
+import com.android.launcher3.util.ViewEx;
 import com.android.launcher3.util.ViewPool;
 import com.android.quickstep.BaseContainerInterface;
 import com.android.quickstep.GestureState;
@@ -195,7 +196,6 @@ import com.android.quickstep.TaskViewUtils;
 import com.android.quickstep.TopTaskTracker;
 import com.android.quickstep.fallback.RecentsState;
 import com.android.quickstep.orientation.RecentsPagedOrientationHandler;
-import com.android.quickstep.recents.di.RecentsComponent;
 import com.android.quickstep.recents.viewmodel.RecentsViewModel;
 import com.android.quickstep.split.SplitAnimationController.Companion.SplitAnimInitProps;
 import com.android.quickstep.split.SplitAnimationTimings;
@@ -530,7 +530,6 @@ public abstract class RecentsView<
     public static final float UPDATE_SYSUI_FLAGS_THRESHOLD = 0.85f;
 
     protected final CONTAINER_TYPE mContainer;
-    private final RecentsComponent mRecentsComponent;
     private final float mFastFlingVelocity;
     private final int mScrollHapticMinGapMillis;
     private final int mSplitPlaceholderSize;
@@ -665,10 +664,7 @@ public abstract class RecentsView<
         public void onActivityRestartAttempt(ActivityManager.RunningTaskInfo task,
                 boolean homeTaskVisible, boolean clearedTask, boolean wasVisible) {
             if (enableCreateAnyBubble()) {
-                boolean isAppBubble =
-                        sendBubbleRootTaskIdToLauncher() ? BubbleHelper.isAppBubbleTask(task)
-                                : task.isAppBubble;
-                if (isAppBubble && mHandleTaskStackChanges) {
+                if (BubbleHelper.isAppBubbleTask(task) && mHandleTaskStackChanges) {
                     // Remove task from recents if it moved to a bubble, but keep it running
                     dismissTask(task.taskId, /* removeTask= */ false);
                 }
@@ -873,8 +869,7 @@ public abstract class RecentsView<
         mContainer = RecentsViewContainer.containerFromContext(context);
         mContainerInterface = mContainer.getContainerInterface();
 
-        mRecentsComponent = mContainer.getRecentsComponent();
-        initialiseInjectables(mRecentsComponent);
+        initialiseInjectables();
         mUtils = mUtilsFactory.create(this);
         mDismissUtils = mDismissUtilsFactory.create(this);
 
@@ -937,7 +932,7 @@ public abstract class RecentsView<
         mTintingColor = getForegroundScrimDimColor(context);
     }
 
-    protected abstract void initialiseInjectables(@NonNull RecentsComponent recentsComponent);
+    protected abstract void initialiseInjectables();
 
     public OverScroller getScroller() {
         return mScroller;
@@ -1070,6 +1065,8 @@ public abstract class RecentsView<
             mEmptyMessagePaint.setAntiAlias(true);
             setWillNotDraw(false);
         }
+        ViewEx.registerLifecycleTask(this,
+                () -> mSystemUiProxy.getPipAnimationListeners().register(mIPipAnimationListener));
         updateEmptyMessage();
     }
 
@@ -1104,8 +1101,7 @@ public abstract class RecentsView<
                 .setSyncTransactionApplier(mSyncTransactionApplier));
         mRecentsModel.addThumbnailChangeListener(this);
         mIPipAnimationListener.setActivityAndRecentsView(mContainer, this);
-        mSystemUiProxy.setPipAnimationListener(
-                mIPipAnimationListener);
+
         // Late initializer for SystemUiProxy
         mSystemUiProxy.addOnStateChangeListener(mPreloadRunnable);
         mOrientationState.initListeners();
@@ -1130,7 +1126,6 @@ public abstract class RecentsView<
                 .setSyncTransactionApplier(null));
         executeSideTaskLaunchCallback();
         mRecentsModel.removeThumbnailChangeListener(this);
-        mSystemUiProxy.setPipAnimationListener(null);
         mSystemUiProxy.removeOnStateChangeListener(mPreloadRunnable);
         mIPipAnimationListener.setActivityAndRecentsView(null, null);
         mOrientationState.destroyListeners();
@@ -2071,6 +2066,10 @@ public abstract class RecentsView<
         taskView.setModalness(mTaskModalness);
         taskView.setTaskThumbnailSplashAlpha(mTaskThumbnailSplashAlpha);
         taskView.setBorderEnabled(mBorderEnabled);
+
+        if (taskView instanceof DesktopTaskView desktopTaskView) {
+            desktopTaskView.setExplodeProgress(mUtils.getDeskExplodeProgress());
+        }
     }
 
     public void resetTaskVisuals() {
@@ -2469,7 +2468,13 @@ public abstract class RecentsView<
                 }
             }
 
-            mContainer.startHome(animated, onHomeAnimationComplete);
+            InteractionJankMonitorWrapper.begin(this, CUJ_LAUNCHER_RECENTS_TO_HOME);
+            mContainer.startHome(animated, () -> {
+                InteractionJankMonitorWrapper.end(CUJ_LAUNCHER_RECENTS_TO_HOME);
+                if (onHomeAnimationComplete != null) {
+                    onHomeAnimationComplete.run();
+                }
+            });
         } finally {
             AbstractFloatingView.closeAllOpenViews(mContainer, mContainer.isStarted());
         }
@@ -2593,7 +2598,7 @@ public abstract class RecentsView<
             case DESKTOP -> mDesktopTaskViewPool.getView();
             default -> mTaskViewPool.getView();
         };
-        taskView.initialiseInjectables(mRecentsComponent);
+        taskView.initialiseInjectables(mContainer.getActivityComponent());
         taskView.setTaskViewId(mTaskViewIdCount);
         if (mTaskViewIdCount == Integer.MAX_VALUE) {
             mTaskViewIdCount = 0;

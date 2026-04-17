@@ -29,6 +29,9 @@ import com.android.launcher3.taskbar.TaskbarViewTestUtil.createHotseatWorkspaceI
 import com.android.launcher3.taskbar.rules.TaskbarUnitTestRule
 import com.android.launcher3.taskbar.rules.TaskbarWindowSandboxContext
 import com.android.launcher3.taskbar.rules.TaskbarWindowSandboxContext.Companion.getDeviceParams
+import com.android.launcher3.util.rule.TestStabilityRule
+import com.android.launcher3.util.rule.TestStabilityRule.DesktopStability
+import com.android.launcher3.util.rule.TestStabilityRule.LOCAL
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
@@ -73,6 +76,7 @@ class TaskbarViewControllerTest(deviceName: String) {
 
     @get:Rule(order = 0) val context = TaskbarWindowSandboxContext.create(deviceName)
     @get:Rule(order = 1) val taskbarUnitTestRule = TaskbarUnitTestRule(context)
+    @get:Rule val testStabilityRule = TestStabilityRule()
 
     private val taskbarViewController by taskbarUnitTestRule.delegate { it.taskbarViewController }
 
@@ -311,6 +315,7 @@ class TaskbarViewControllerTest(deviceName: String) {
     }
 
     @Test
+    @DesktopStability(flavors = LOCAL, bug = 486204663)
     fun testUpdateDescriptionWithRunningState_runningTaskOutsideDesktop_noStateInDescription() {
         setPrimaryDisplayInDesktopMode(false)
         val btv = createTestBtv(TEST_TASK, RUNNING)

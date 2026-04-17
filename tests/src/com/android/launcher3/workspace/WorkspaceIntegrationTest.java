@@ -23,9 +23,14 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import android.platform.test.rule.SkipOnDesktop;
+import android.view.View;
+
+import com.android.launcher3.AbstractFloatingView;
 import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.Launcher;
 import com.android.launcher3.LauncherState;
+import com.android.launcher3.R;
 import com.android.launcher3.util.BaseLauncherActivityTest;
 import com.android.launcher3.util.LauncherLayoutBuilder;
 import com.android.launcher3.util.LauncherModelHelper;
@@ -175,18 +180,24 @@ public class WorkspaceIntegrationTest extends BaseLauncherActivityTest<Launcher>
                 getWorkspacePageCount()
         );
 
-        // Delete one page by dragging app to hot seat.
-        workspaceDragHelper.dragIcon(
-                workspaceDragHelper.getWorkspaceAppIcon(TEST_ACTIVITY),
-                0,
-                CONTAINER_HOTSEAT
-        );
+        // Delete one page by deleting the item from workspace.
+        getLauncherActivity().executeOnLauncher(launcher -> {
+            final View view = launcher.getWorkspace().mapOverItems(
+                    workspaceDragHelper.getWorkspaceAppIcon(TEST_ACTIVITY));
+            assertNotNull(view);
+            launcher.getAccessibilityDelegate().performAccessibilityAction(view, R.id.action_remove,
+                    null);
+            AbstractFloatingView.getOpenView(launcher, AbstractFloatingView.TYPE_SNACKBAR).close(
+                    false);
+        });
 
         // Refresh workspace to avoid using stale container error.
         assertEquals("Incorrect Page count Number", pagesPerScreen(), getWorkspacePageCount());
     }
 
     @Test
+    // No hotseat on desktop, consider adding a similar test for taskbar once b/466972765 is done.
+    @SkipOnDesktop
     public void testDragToAndFromHotseat() {
         WorkspaceDragHelper workspaceDragHelper = new WorkspaceDragHelper(getLauncherActivity());
 

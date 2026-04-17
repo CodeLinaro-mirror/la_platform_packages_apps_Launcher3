@@ -23,7 +23,6 @@ import static com.android.launcher3.Flags.enableCursorDrivenWorkflows;
 import static com.android.launcher3.Flags.enableFileSystemFoldersAsDropTargets;
 import static com.android.launcher3.Flags.enableSystemDragToOtherApps;
 import static com.android.launcher3.Flags.enableTaskbarDragAndDrop;
-import static com.android.launcher3.Flags.injectableModelItems;
 import static com.android.launcher3.LauncherAnimUtils.SPRING_LOADED_EXIT_DELAY;
 import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS_PREDICTION;
 import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_DESKTOP;
@@ -44,7 +43,6 @@ import static com.android.launcher3.LauncherState.HINT_STATE;
 import static com.android.launcher3.LauncherState.NORMAL;
 import static com.android.launcher3.LauncherState.SPRING_LOADED;
 import static com.android.launcher3.MotionEventsUtils.isTrackpadMultiFingerSwipe;
-import static com.android.launcher3.Utilities.qsbOnFirstScreen;
 import static com.android.launcher3.anim.AnimatorListeners.forSuccessCallback;
 import static com.android.launcher3.config.FeatureFlags.FOLDABLE_SINGLE_PAGE;
 import static com.android.launcher3.logging.StatsLogManager.LAUNCHER_STATE_HOME;
@@ -120,6 +118,7 @@ import com.android.launcher3.folder.PreviewBackground;
 import com.android.launcher3.graphics.DragPreviewProvider;
 import com.android.launcher3.homescreenfiles.HomeScreenFile;
 import com.android.launcher3.homescreenfiles.HomeScreenFilesProvider;
+import com.android.launcher3.homescreenfiles.HomeScreenFilesUpdate;
 import com.android.launcher3.homescreenfiles.HomeScreenFilesUtils;
 import com.android.launcher3.homescreenfiles.HomeScreenFilesUtilsKt;
 import com.android.launcher3.icons.FastBitmapDrawable;
@@ -132,6 +131,7 @@ import com.android.launcher3.model.data.FolderInfo;
 import com.android.launcher3.model.data.ItemInfo;
 import com.android.launcher3.model.data.ItemInfoWithIcon;
 import com.android.launcher3.model.data.LauncherAppWidgetInfo;
+import com.android.launcher3.model.data.WorkspaceItemCoordinates;
 import com.android.launcher3.model.data.WorkspaceItemInfo;
 import com.android.launcher3.pageindicators.PageIndicator;
 import com.android.launcher3.pageindicators.PageIndicatorDotsWithArrows;
@@ -290,7 +290,6 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     private boolean mCreateUserFolderOnDrop = false;
     private boolean mAddToExistingFolderOnDrop = false;
 
-    private View mFirstPagePinnedItem;
     private boolean mIsDownOverHorizontalScrollContent;
 
     final static float START_DAMPING_TOUCH_SLOP_ANGLE = (float) Math.PI / 6;
@@ -341,7 +340,7 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                 @Override
                 public void onStateTransitionComplete(LauncherState finalState) {
                     if (finalState == NORMAL) {
-                        performAccessibilityActionOnViewTree(Workspace.this);
+                        ViewEx.performAccessibilityActionOnViewTree(Workspace.this);
                     }
                 }
             };
@@ -574,16 +573,6 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                 .log(LauncherEvent.LAUNCHER_ITEM_DRAG_STARTED);
     }
 
-    @Override
-    public void onDragEnterWindow(DropTarget.DragObject dragObject, DragOptions options) {
-        // No-op
-    }
-
-    @Override
-    public void onDragExitWindow(DropTarget.DragObject dragObject, DragOptions options) {
-        // No-op
-    }
-
     private boolean isTwoPanelEnabled() {
         return !FOLDABLE_SINGLE_PAGE.get() && mLauncher.mDeviceProfile.getDeviceProperties().isTwoPanels();
     }
@@ -674,39 +663,13 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
      */
     public void bindAndInitFirstWorkspaceScreen() {
         // Add the first page
-        CellLayout firstPage = insertNewWorkspaceScreen(Workspace.FIRST_SCREEN_ID, getChildCount());
-        if (!qsbOnFirstScreen()) {
-            mFirstPagePinnedItem = null;
-            return;
-        }
-
-        if (mFirstPagePinnedItem == null) {
-            // In transposed layout, we add the first page pinned widget in the Grid.
-            // As workspace does not touch the edges, we do not need a full
-            // width first page pinned item.
-            mFirstPagePinnedItem = LayoutInflater.from(getContext())
-                    .inflate(R.layout.search_container_workspace, firstPage, false);
-        }
-
-        int cellHSpan = mLauncher.getDeviceProfile().inv.numSearchContainerColumns;
-        CellLayoutLayoutParams lp = new CellLayoutLayoutParams(0, 0, cellHSpan, 1);
-        lp.canReorder = false;
-        if (!firstPage.addViewToCellLayout(
-                mFirstPagePinnedItem, 0, R.id.search_container_workspace, lp, true)) {
-            Log.e(TAG, "Failed to add to item at (0, 0) to CellLayout");
-            mFirstPagePinnedItem = null;
-        }
+        insertNewWorkspaceScreen(Workspace.FIRST_SCREEN_ID, getChildCount());
     }
 
     public void removeAllWorkspaceScreens() {
         // Disable all layout transitions before removing all pages to ensure that we don't get the
         // transition animations competing with us changing the scroll when we add pages
         disableLayoutTransitions();
-
-        // Recycle the first page pinned item
-        if (mFirstPagePinnedItem != null) {
-            ((ViewGroup) mFirstPagePinnedItem.getParent()).removeView(mFirstPagePinnedItem);
-        }
 
         // Remove the pages and clear the screen models
         removeAllViews();
@@ -1240,47 +1203,31 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         float y = ev.getY();
 
         mIsDownOverHorizontalScrollContent = false;
-        if (injectableModelItems()) {
-            int childCount = getChildCount();
-            if (childCount <= 0) return;
-            int currentPage = getCurrentPage();
-            int lastVisiblePage = getPanelCount() + currentPage;
-            CellLayout targetPage = null;
-            for (int index = currentPage; index < lastVisiblePage && index < childCount; index++) {
-                CellLayout page = (CellLayout) getPageAt(index);
-                int left = page.getLeft() - getScrollX();
+        int childCount = getChildCount();
+        if (childCount <= 0) return;
+        int currentPage = getCurrentPage();
+        int lastVisiblePage = getPanelCount() + currentPage;
+        CellLayout targetPage = null;
+        for (int index = currentPage; index < lastVisiblePage && index < childCount; index++) {
+            CellLayout page = (CellLayout) getPageAt(index);
+            int left = page.getLeft() - getScrollX();
 
-                if (x >= left && x <= (left + page.getWidth())) {
-                    targetPage = page;
-                    break;
-                }
+            if (x >= left && x <= (left + page.getWidth())) {
+                targetPage = page;
+                break;
             }
-            if (targetPage == null) return;
-
-            // Find the item at the original down point
-            final float[] tempFXY = new float[] {x, y};
-            Utilities.mapCoordInSelfToDescendant(targetPage, this, tempFXY);
-            int[] coordinates = new int[2];
-            targetPage.pointToCellExact((int) tempFXY[0], (int) tempFXY[1], coordinates);
-            View targetItem = targetPage.getChildAt(coordinates[0], coordinates[1]);
-
-            mIsDownOverHorizontalScrollContent =
-                    (targetItem instanceof ScrollableContent sc) && sc.canScrollHorizontally();
-            return;
         }
+        if (targetPage == null) return;
 
-        if (mFirstPagePinnedItem != null) {
-            final float[] tempFXY = new float[2];
-            tempFXY[0] = x;
-            tempFXY[1] = y;
-            Utilities.mapCoordInSelfToDescendant(mFirstPagePinnedItem, this, tempFXY);
-            mIsDownOverHorizontalScrollContent = mFirstPagePinnedItem.getLeft() <= tempFXY[0]
-                    && mFirstPagePinnedItem.getRight() >= tempFXY[0]
-                    && mFirstPagePinnedItem.getTop() <= tempFXY[1]
-                    && mFirstPagePinnedItem.getBottom() >= tempFXY[1];
-        } else {
-            mIsDownOverHorizontalScrollContent = false;
-        }
+        // Find the item at the original down point
+        final float[] tempFXY = new float[] {x, y};
+        Utilities.mapCoordInSelfToDescendant(targetPage, this, tempFXY);
+        int[] coordinates = new int[2];
+        targetPage.pointToCellExact((int) tempFXY[0], (int) tempFXY[1], coordinates);
+        View targetItem = targetPage.getChildAt(coordinates[0], coordinates[1]);
+
+        mIsDownOverHorizontalScrollContent =
+                (targetItem instanceof ScrollableContent sc) && sc.canScrollHorizontally();
     }
 
     @Override
@@ -2241,7 +2188,13 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
 
                 final List<CompletableFuture<Boolean>> results =
                         HomeScreenFilesProvider.INSTANCE.get(mLauncher)
-                                .moveToHomeScreen(uriList, relativeFolderPath);
+                                .moveToHomeScreen(uriList,
+                                        HomeScreenFilesUpdate.Extras.builder()
+                                                .findSpaceStartingFrom(new WorkspaceItemCoordinates(
+                                                        dropOverInfo.screenId, dropOverInfo.cellX,
+                                                        dropOverInfo.cellY, dropOverInfo.container))
+                                                .build(),
+                                        relativeFolderPath);
 
                 runOnFirstFailure(
                         results,
@@ -2855,9 +2808,7 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         CellLayout layout = null;
         if (shouldUseHotseatAsDropLayout(d)) {
             layout = mLauncher.getHotseat();
-        } else if (!isDragObjectOverSmartSpace(d)) {
-            // If the object is over qsb/smartspace, we don't want to highlight anything.
-
+        } else {
             // Check neighbour pages
             layout = checkDragObjectIsOverNeighbourPages(d, centerX);
 
@@ -2886,14 +2837,6 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
             return false;
         }
         getViewBoundsRelativeToWorkspace(hotseat.getShortcutsAndWidgets(), mTempRect);
-        return mTempRect.contains(dragObject.x, dragObject.y);
-    }
-
-    private boolean isDragObjectOverSmartSpace(DragObject dragObject) {
-        if (mFirstPagePinnedItem == null) {
-            return false;
-        }
-        getViewBoundsRelativeToWorkspace(mFirstPagePinnedItem, mTempRect);
         return mTempRect.contains(dragObject.x, dragObject.y);
     }
 
@@ -2988,8 +2931,10 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
             setDragMode(DRAG_MODE_CREATE_FOLDER);
 
             if (dragObject.stateAnnouncer != null) {
+                ItemInfo dropOverInfo = (ItemInfo) mDragOverView.getTag();
+                String pageDescription = getPageDescription(dropOverInfo.screenId);
                 dragObject.stateAnnouncer.announce(WorkspaceAccessibilityHelper
-                        .getDescriptionForDropOver(mDragOverView, getContext()));
+                        .getDescriptionForDropOver(mDragOverView, getContext(), pageDescription));
             }
             return;
         }
@@ -3014,8 +2959,10 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
             setDragMode(DRAG_MODE_ADD_TO_FOLDER);
 
             if (dragObject.stateAnnouncer != null) {
+                ItemInfo dropOverInfo = (ItemInfo) mDragOverView.getTag();
+                String pageDescription = getPageDescription(dropOverInfo.screenId);
                 dragObject.stateAnnouncer.announce(WorkspaceAccessibilityHelper
-                        .getDescriptionForDropOver(mDragOverView, getContext()));
+                        .getDescriptionForDropOver(mDragOverView, getContext(), pageDescription));
             }
             return;
         }
@@ -3262,7 +3209,14 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                 // (2) the creation of new workspace items for any additionally dropped URIs.
                 List<Uri> uriList = requireNonNull(payload.getUriList());
                 HomeScreenFilesProvider provider = HomeScreenFilesProvider.INSTANCE.get(mLauncher);
-                List<CompletableFuture<Boolean>> results = provider.moveToHomeScreen(uriList);
+                List<CompletableFuture<Boolean>> results =
+                        provider.moveToHomeScreen(uriList,
+                                HomeScreenFilesUpdate.Extras.builder()
+                                        .findSpaceStartingFrom(new WorkspaceItemCoordinates(
+                                                firstItemInfo.screenId, firstItemInfo.cellX,
+                                                firstItemInfo.cellY, firstItemInfo.container))
+                                        .build(),
+                                /*relativeFolderPath=*/ null);
 
                 runOnFirstFailure(
                         results,
@@ -3887,24 +3841,6 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         @Override
         public void onAnimationEnd(Animator animation) {
             onEndStateTransition();
-        }
-    }
-
-    /**
-     * Recursively check view tag {@link R.id.perform_a11y_action_on_launcher_state_normal_tag} and
-     * call {@link View#performAccessibilityAction(int, Bundle)} on view tree. The tag is cleared
-     * after this call.
-     */
-    private static void performAccessibilityActionOnViewTree(View view) {
-        Object tag = view.getTag(R.id.perform_a11y_action_on_launcher_state_normal_tag);
-        if (tag instanceof Integer) {
-            view.performAccessibilityAction((int) tag, null);
-            view.setTag(R.id.perform_a11y_action_on_launcher_state_normal_tag, null);
-        }
-        if (view instanceof ViewGroup viewgroup) {
-            for (int i = 0; i < viewgroup.getChildCount(); i++) {
-                performAccessibilityActionOnViewTree(viewgroup.getChildAt(i));
-            }
         }
     }
 

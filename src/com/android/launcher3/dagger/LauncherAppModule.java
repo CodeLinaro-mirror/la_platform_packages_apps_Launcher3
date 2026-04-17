@@ -17,8 +17,10 @@
 package com.android.launcher3.dagger;
 
 import com.android.launcher3.concurrent.ExecutorsModule;
+import com.android.launcher3.organizer.generator.GeneratorModule;
 import com.android.launcher3.util.dagger.LauncherExecutorsModule;
 import com.android.launcher3.widgetpicker.LauncherWidgetPickerModule;
+import com.android.launcher3.workspacefunctions.WorkspaceFunctionsModule;
 
 import dagger.Module;
 
@@ -41,6 +43,8 @@ import dagger.Module;
                 DesktopModule.class,
                 AutomationModule.class,
                 TaskOverlayModule.class,
+                WorkspaceFunctionsModule.class,
+                GeneratorModule.class,
         },
         subcomponents = ActivityContextComponent.class)
 public class LauncherAppModule {

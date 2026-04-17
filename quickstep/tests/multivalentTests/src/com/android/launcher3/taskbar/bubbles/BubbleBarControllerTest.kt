@@ -24,6 +24,7 @@ import com.android.launcher3.taskbar.rules.TaskbarUnitTestRule
 import com.android.launcher3.taskbar.rules.TaskbarWindowSandboxContext
 import com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_IME_VISIBLE
 import com.android.wm.shell.Flags.FLAG_ENABLE_BUBBLE_BAR
+import com.android.wm.shell.Flags.FLAG_FIX_BUBBLE_BAR_STASHING_WITH_HARDWARE_KEYBOARD
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
@@ -56,7 +57,8 @@ class BubbleBarControllerTest {
     }
 
     @Test
-    fun testUpdateStateForSysuiFlags_imeVisibleAndNotDocked_doesNotStash() {
+    @EnableFlags(FLAG_FIX_BUBBLE_BAR_STASHING_WITH_HARDWARE_KEYBOARD)
+    fun testUpdateStateForSysuiFlags_imeVisibleAndNotDocked_withFlagEnabled_doesNotStash() {
         activityContext.setImeDockedOverrideForTest(false)
 
         runOnTaskbarUiThreadSync {
@@ -71,6 +73,26 @@ class BubbleBarControllerTest {
         activityContext.setImeDockedOverrideForTest(false)
 
         runOnTaskbarUiThreadSync { bubbleBarController.updateStateForSysuiFlags(0) }
+
+        assertThat(bubbleBarViewController.isHiddenForSysui).isFalse()
+    }
+
+    @Test
+    @EnableFlags(FLAG_FIX_BUBBLE_BAR_STASHING_WITH_HARDWARE_KEYBOARD)
+    fun testOnImeInsetChanged_imeDocked_doesStash() {
+        activityContext.setImeDockedOverrideForTest(true)
+
+        runOnTaskbarUiThreadSync { bubbleBarController.onImeInsetChanged() }
+
+        assertThat(bubbleBarViewController.isHiddenForSysui).isTrue()
+    }
+
+    @Test
+    @EnableFlags(FLAG_FIX_BUBBLE_BAR_STASHING_WITH_HARDWARE_KEYBOARD)
+    fun testOnImeInsetChanged_imeNotDocked_doesNotStash() {
+        activityContext.setImeDockedOverrideForTest(false)
+
+        runOnTaskbarUiThreadSync { bubbleBarController.onImeInsetChanged() }
 
         assertThat(bubbleBarViewController.isHiddenForSysui).isFalse()
     }

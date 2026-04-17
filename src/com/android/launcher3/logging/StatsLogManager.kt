@@ -661,6 +661,11 @@ open class StatsLogManager protected constructor(@JvmField protected val mContex
         LAUNCHER_HOME_SCREEN_FILES_OPEN_VIA_CONTEXT_MENU(2542),
         @UiEvent(
             doc =
+                "User renamed the home screen file system item via its long-press/right-click context menu"
+        )
+        LAUNCHER_HOME_SCREEN_FILES_RENAME_VIA_CONTEXT_MENU(2660),
+        @UiEvent(
+            doc =
                 "User deleted the home screen file system item via its long-press/right-click context menu"
         )
         LAUNCHER_HOME_SCREEN_FILES_DELETE_VIA_CONTEXT_MENU(2543),
@@ -719,6 +724,7 @@ open class StatsLogManager protected constructor(@JvmField protected val mContex
                     "triggering Contextual Search")
         )
         LAUNCHER_LATENCY_CONTEXTUAL_SEARCH_LPNH_ABANDON(2171),
+        @UiEvent(doc = "The duration to recreate taskbar.") LAUNCHER_LATENCY_RECREATE_TASKBAR(2683),
     }
 
     /** Launcher specific ranking related events. */
@@ -820,6 +826,9 @@ open class StatsLogManager protected constructor(@JvmField protected val mContex
 
         /** Sets latency of the event. */
         fun withLatency(latencyInMillis: Long) = this
+
+        /** Sets timestamp of the end event. */
+        fun withEndTimestamp(timestampInMillis: Long) = this
 
         /** Sets [LatencyType] of log message. */
         fun withType(type: LatencyType?) = this

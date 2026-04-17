@@ -201,6 +201,8 @@ public class TouchInteractionHandler extends ContextWrapper {
     private final TaskbarManager mTaskbarManager;
     private final ActiveTrackpadList mTrackpadsConnected;
 
+    private final DesktopVisibilityController mDesktopVisibilityController;
+
     private boolean mUserUnlocked = false;
 
     @Nullable private DisplayModel<InputResource> mInputResourceDisplayModel;
@@ -226,6 +228,7 @@ public class TouchInteractionHandler extends ContextWrapper {
             TaskbarManager taskbarManager,
             ActiveTrackpadList activeTrackpadList,
             DisplayModel.Factory<InputResource> displayModelFactory,
+            DesktopVisibilityController desktopVisibilityController,
             @Ui Executor uiExecutor,
             @Named(CONNECTION_CLEANER) ThreadSafeRunnableList cleanupTasks
     ) {
@@ -267,6 +270,8 @@ public class TouchInteractionHandler extends ContextWrapper {
                     }
                     return null;
                 }));
+
+        mDesktopVisibilityController = desktopVisibilityController;
 
         // Call runOnUserUnlocked() before any other callbacks to ensure everything is initialized.
         lockedUserState.runOnUserUnlocked(mUserUnlockedRunnable);
@@ -377,14 +382,17 @@ public class TouchInteractionHandler extends ContextWrapper {
 
     private void onOverviewTargetChanged(boolean isHomeAndOverviewSame) {
         mAllAppsActionManager.setHomeAndOverviewSame(isHomeAndOverviewSame);
+        BaseContainerInterface<?, ?> containerInterface =
+                mOverviewComponentObserver.get().getContainerInterface(DEFAULT_DISPLAY);
         RecentsViewContainer newOverviewContainer =
-                mOverviewComponentObserver.get().getContainerInterface(
-                        DEFAULT_DISPLAY).getCreatedContainer();
+                containerInterface == null ? null : containerInterface.getCreatedContainer();
         if (newOverviewContainer != null) {
-            if (newOverviewContainer instanceof StatefulActivity activity) {
+            if (newOverviewContainer instanceof StatefulActivity<?> activity) {
                 // This will also call setRecentsViewContainer() internally.
                 mTaskbarManager.setActivity(activity);
-            } else {
+            } else if (!isHomeAndOverviewSame) {
+                // When isHomeAndOverviewSame is true, QuickstepLauncher.onOverviewTargetChanged
+                // will call TaskbarManager.setActivity
                 mTaskbarManager.setRecentsViewContainer(newOverviewContainer);
             }
         }
@@ -618,7 +626,8 @@ public class TouchInteractionHandler extends ContextWrapper {
                         mOverviewCommandHelper.get(),
                         event,
                         rotationTouchHelper,
-                        mDesktopState);
+                        mDesktopState,
+                        mDesktopVisibilityController);
                 inputResource.uncheckedConsumer = inputResource.consumer;
             } else if ((deviceState.isFullyGesturalNavMode() || isTrackpadMultiFingerSwipe(event))
                     && deviceState.canTriggerAssistantAction(event)) {
@@ -897,7 +906,7 @@ public class TouchInteractionHandler extends ContextWrapper {
         ActiveGestureLog.INSTANCE.dump("", pw);
         RecentsModel.INSTANCE.get(this).dump("", pw);
         mTaskbarManager.dumpLogs("", pw);
-        DesktopVisibilityController.INSTANCE.get(this).dumpLogs("", pw);
+        mDesktopVisibilityController.dumpLogs("", pw);
         pw.println("ContextualSearchStateManager:");
         ContextualSearchStateManager.INSTANCE.get(this).dump("\t", pw);
         mSystemUiProxy.dump(pw);
@@ -916,10 +925,16 @@ public class TouchInteractionHandler extends ContextWrapper {
             Log.d(TAG, "displayId " + displayId + " not valid");
             return null;
         }
-        return new LauncherSwipeHandlerV2(this, taskAnimationManager, deviceState,
-                rotationTouchHelper, gestureState, touchTimeMs,
+        return new LauncherSwipeHandlerV2(
+                /*context= */ this,
+                taskAnimationManager,
+                deviceState,
+                rotationTouchHelper,
+                gestureState,
                 taskAnimationManager.isRecentsAnimationRunning(),
-                mInputConsumer, MSDLPlayerWrapper.INSTANCE.get(this), displayId);
+                mInputConsumer,
+                MSDLPlayerWrapper.INSTANCE.get(this),
+                displayId);
     }
 
     private @Nullable AbsSwipeUpHandler<?, ?, ?> createFallbackSwipeHandler(
@@ -932,10 +947,16 @@ public class TouchInteractionHandler extends ContextWrapper {
             Log.d(TAG, "displayId " + displayId + " not valid");
             return null;
         }
-        return new FallbackSwipeHandler(this, taskAnimationManager, deviceState,
-                rotationTouchHelper, gestureState, touchTimeMs,
+        return new FallbackSwipeHandler(
+                /* context= */ this,
+                taskAnimationManager,
+                deviceState,
+                rotationTouchHelper,
+                gestureState,
                 taskAnimationManager.isRecentsAnimationRunning(),
-                mInputConsumer, MSDLPlayerWrapper.INSTANCE.get(this), displayId);
+                mInputConsumer,
+                MSDLPlayerWrapper.INSTANCE.get(this),
+                displayId);
     }
 
     private @Nullable AbsSwipeUpHandler<?, ?, ?> createRecentsWindowSwipeHandler(
@@ -951,10 +972,15 @@ public class TouchInteractionHandler extends ContextWrapper {
             return null;
         }
         return new RecentsWindowSwipeHandler(recentsWindowManager,
-                taskAnimationManager, deviceState,
-                rotationTouchHelper, recentsWindowManager, gestureState, touchTimeMs,
+                taskAnimationManager,
+                deviceState,
+                rotationTouchHelper,
+                recentsWindowManager,
+                gestureState,
                 taskAnimationManager.isRecentsAnimationRunning(),
-                mInputConsumer, MSDLPlayerWrapper.INSTANCE.get(this), displayId);
+                mInputConsumer,
+                MSDLPlayerWrapper.INSTANCE.get(this),
+                displayId);
     }
 
     public class InputResource implements DisplayModel.DisplayResource {

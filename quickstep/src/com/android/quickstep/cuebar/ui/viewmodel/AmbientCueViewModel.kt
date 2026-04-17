@@ -25,6 +25,10 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.toComposeRect
+import com.android.cuebar.ui.viewmodel.ActionType
+import com.android.cuebar.ui.viewmodel.ActionViewModel
+import com.android.cuebar.ui.viewmodel.IconViewModel
+import com.android.launcher3.Flags.enableCueBarDesktopFormFactor
 import com.android.launcher3.LauncherPrefChangeListener
 import com.android.launcher3.LauncherPrefs
 import com.android.launcher3.concurrent.annotations.Ui
@@ -55,6 +59,7 @@ constructor(
     private val ambientCueInteractor: AmbientCueInteractor,
     private val launcherPrefs: LauncherPrefs,
     private val ambientCueLogger: AmbientCueLogger,
+    private val isDesktopFormFactor: Boolean,
     private val scope: CoroutineScope,
     @Ui private val uiExecutor: Executor,
 ) : ViewModel {
@@ -118,6 +123,7 @@ constructor(
         isExpanded = false
         disableFirstTimeHint()
         ambientCueLogger.setClickedCloseButtonStatus()
+        ambientCueInteractor.reportCloseEvent()
     }
 
     private val listeners = mutableListOf<SafeCloseable>()
@@ -195,12 +201,15 @@ constructor(
         val isGestureNav = ambientCueInteractor.isGestureNav.value
         val isTaskBarVisible = ambientCueInteractor.isTaskBarVisible.value
         pillStyle =
-            if (isGestureNav && !isTaskBarVisible) {
-                PillStyleViewModel.NavBarPillStyle
-            } else {
-                val position =
-                    if (isGestureNav) null else ambientCueInteractor.recentsButtonPosition.value
-                PillStyleViewModel.ShortPillStyle(position?.toComposeRect())
+            when {
+                enableCueBarDesktopFormFactor() && isDesktopFormFactor ->
+                    PillStyleViewModel.DesktopPillStyle
+                isGestureNav && !isTaskBarVisible -> PillStyleViewModel.NavBarPillStyle
+                else -> {
+                    val position =
+                        if (isGestureNav) null else ambientCueInteractor.recentsButtonPosition.value
+                    PillStyleViewModel.ShortPillStyle(position?.toComposeRect())
+                }
             }
         // Handle timeout activation
         if (isRootAttached) {
@@ -291,8 +300,6 @@ constructor(
             } else {
                 currentUnfilteredActions
             }
-
-        Log.d(TAG, "updateActionViewModelList: isImeVisible=$isImeVisible actions=$filteredActions")
 
         actions =
             filteredActions

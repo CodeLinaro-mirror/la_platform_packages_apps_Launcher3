@@ -22,16 +22,15 @@ import static com.android.app.animation.Interpolators.EMPHASIZED;
 import static com.android.app.animation.Interpolators.FINAL_FRAME;
 import static com.android.app.animation.Interpolators.LINEAR;
 import static com.android.launcher3.Flags.enableTaskbarDragAndDrop;
-import static com.android.launcher3.LauncherAnimUtils.SCALE_PROPERTY;
 import static com.android.launcher3.LauncherAnimUtils.VIEW_ALPHA;
 import static com.android.launcher3.LauncherAnimUtils.VIEW_TRANSLATE_X;
 import static com.android.launcher3.LauncherAnimUtils.VIEW_TRANSLATE_Y;
+import static com.android.launcher3.LauncherAnimUtils.getScaleProperty;
 import static com.android.launcher3.LauncherModel.useModelRepositoryBinding;
 import static com.android.launcher3.Utilities.dpToPx;
 import static com.android.launcher3.Utilities.mapRange;
 import static com.android.launcher3.anim.AnimatedFloat.VALUE;
 import static com.android.launcher3.anim.AnimatorListeners.forEndCallback;
-import static com.android.launcher3.config.FeatureFlags.enableTaskbarPinning;
 import static com.android.launcher3.taskbar.TaskbarActivityContext.TASKBAR_WINDOW_ICONS_TRANSITION;
 import static com.android.launcher3.taskbar.TaskbarPinningController.PINNING_PERSISTENT;
 import static com.android.launcher3.taskbar.TaskbarPinningController.PINNING_TRANSIENT;
@@ -209,7 +208,7 @@ public class TaskbarViewController implements TaskbarControllers.LoggableTaskbar
 
     private final View.OnLayoutChangeListener mTaskbarViewLayoutChangeListener =
             (v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
-                if (enableTaskbarPinning() && mBubbleControllers != null) {
+                if (mBubbleControllers != null) {
                     mControllers.navbarButtonsViewController.onLayoutsUpdated();
                     adjustTaskbarXForBubbleBar();
                     BubbleBarViewController bbvc = mBubbleControllers.bubbleBarViewController;
@@ -520,6 +519,11 @@ public class TaskbarViewController implements TaskbarControllers.LoggableTaskbar
 
     public Rect getTransientTaskbarIconLayoutBoundsInParent() {
         return mTaskbarView.getTransientTaskbarIconLayoutBoundsInParent();
+    }
+
+    /** Returns taskbar visual icon bounds on the screen. **/
+    public Rect getTaskbarIconsBoundsOnScreen() {
+        return mTaskbarView.getTaskbarIconsActualBounds();
     }
 
     public View[] getIconViews() {
@@ -870,14 +874,33 @@ public class TaskbarViewController implements TaskbarControllers.LoggableTaskbar
         }
 
         Set<Integer> shownTasks = new HashSet<>();
+
+        // Add IDs for all running tasks currently visible on the taskbar.
         for (BubbleTextView iconView : getAllAppIcons()) {
-            if (iconView.getTag() instanceof TaskItemInfo itemInfo) {
-                shownTasks.add(itemInfo.getTaskId());
-            } else if (iconView.getTag() instanceof SingleTask task) {
-                shownTasks.add(task.getTask().getKey().id);
+            addTaskIdFromTag(iconView.getTag(), shownTasks);
+        }
+
+        // Add IDs for pinned apps that are running but currently hidden in the overflow.
+        // Required only when the overflow is not open.
+        boolean isOverflowOpen = mOverflownAppsContainerController.isOpen();
+        if (!isOverflowOpen) {
+            TaskbarOverflowView pinnedOverflow = mTaskbarView.getTaskbarPinnedOverflowView();
+            if (pinnedOverflow != null) {
+                for (ItemInfo item : pinnedOverflow.getOverflowInfoList()) {
+                    addTaskIdFromTag(item, shownTasks);
+                }
             }
         }
+
         return shownTasks;
+    }
+
+    private void addTaskIdFromTag(Object tag, Set<Integer> outSet) {
+        if (tag instanceof TaskItemInfo taskItem) {
+            outSet.add(taskItem.getTaskId());
+        } else if (tag instanceof SingleTask task) {
+            outSet.add(task.getTask().key.id);
+        }
     }
 
     /**
@@ -1087,8 +1110,9 @@ public class TaskbarViewController implements TaskbarControllers.LoggableTaskbar
      */
     private AnimatorPlaybackController createIconAlignmentController(DeviceProfile launcherDp) {
         PendingAnimation setter = new PendingAnimation(100);
-        // icon alignment not needed for pinned taskbar.
-        if (mActivity.getTaskbarFeatureEvaluator().isPersistent()) {
+        // icon alignment not needed for pinned taskbar or when recents is enabled.
+        if (mControllers.taskbarRecentAppsController.getCanShowRecentApps()
+                || mActivity.getTaskbarFeatureEvaluator().isPersistent()) {
             return setter.createPlaybackController();
         }
         mOnControllerPreCreateCallback.run();
@@ -1177,7 +1201,7 @@ public class TaskbarViewController implements TaskbarControllers.LoggableTaskbar
                 // to avoid icons disappearing rather than fading out visually.
                 setter.setViewAlpha(child, 0, Interpolators.clampToProgress(LINEAR, 0.8f, 1f));
             } else if ((isAllAppsButton && !FeatureFlags.enableAllAppsButtonInHotseat())
-                    || (isTaskbarDividerView && enableTaskbarPinning())
+                    || isTaskbarDividerView
                     || (isRecentTask && !isRecentsInHotseat)
                     || isTaskbarOverflowView) {
                 if (!isToHome
@@ -1215,7 +1239,7 @@ public class TaskbarViewController implements TaskbarControllers.LoggableTaskbar
                                 / 2f;
                 float scale = ((float) taskbarDp.getTaskbarProfile().getIconSize())
                         / launcherDp.getHotseatProfile().getQsbVisualHeight();
-                setter.addFloat(child, SCALE_PROPERTY, scale, 1f, interpolator);
+                setter.addFloat(child, getScaleProperty(), scale, 1f, interpolator);
 
                 float fromX = isRtl ? -halfQsbIconWidthDiff : halfQsbIconWidthDiff;
                 float toX = hotseatIconCenter - childCenter;
@@ -1289,7 +1313,7 @@ public class TaskbarViewController implements TaskbarControllers.LoggableTaskbar
                 setter.setFloat(child, VIEW_TRANSLATE_X, toX, interpolator);
                 setter.setFloat(child, VIEW_TRANSLATE_Y, mTaskbarBottomMargin, interpolator);
             }
-            setter.setFloat(child, SCALE_PROPERTY, scaleUp, interpolator);
+            setter.setFloat(child, getScaleProperty(), scaleUp, interpolator);
         }
     }
 

@@ -66,6 +66,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.scale
@@ -84,12 +85,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEachIndexed
 import androidx.compose.ui.util.lerp
 import com.android.compose.ui.graphics.painter.rememberDrawablePainter
+import com.android.cuebar.ui.viewmodel.ActionType
+import com.android.cuebar.ui.viewmodel.ActionViewModel
 import com.android.launcher3.R
 import com.android.quickstep.cuebar.ui.compose.modifier.animatedActionBorder
 import com.android.quickstep.cuebar.ui.utils.AmbientCueAnimationState
 import com.android.quickstep.cuebar.ui.utils.FilterUtils
-import com.android.quickstep.cuebar.ui.viewmodel.ActionType
-import com.android.quickstep.cuebar.ui.viewmodel.ActionViewModel
+import com.android.quickstep.cuebar.ui.utils.boundsInWindow
 import kotlinx.coroutines.delay
 
 @Composable
@@ -100,6 +102,7 @@ fun NavBarPill(
     visible: Boolean = true,
     expanded: Boolean = false,
     showEducation: Boolean = false,
+    onInteractiveBoundsMeasured: (Rect) -> Unit,
     onClick: () -> Unit = {},
     onCloseClick: () -> Unit = {},
     onCloseEducation: () -> Unit = {},
@@ -255,7 +258,10 @@ fun NavBarPill(
                                 1f
                             }
                     }
-                    .padding(bottom = 4.dp),
+                    .padding(bottom = 4.dp)
+                    .onGloballyPositioned { coordinates ->
+                        onInteractiveBoundsMeasured(coordinates.boundsInWindow())
+                    },
         ) {
             val closeButtonSize = 28.dp
             val closeButtonTouchTargetSize = 36.dp

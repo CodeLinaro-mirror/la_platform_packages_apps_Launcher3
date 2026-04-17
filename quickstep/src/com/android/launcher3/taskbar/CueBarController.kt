@@ -23,6 +23,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import com.android.compose.theme.PlatformTheme
@@ -30,8 +31,8 @@ import com.android.internal.jank.InteractionJankMonitor
 import com.android.launcher3.InsettableFrameLayout
 import com.android.launcher3.LauncherPrefs
 import com.android.launcher3.taskbar.overlay.TaskbarOverlayContext
-import com.android.launcher3.util.Executors.MAIN_EXECUTOR
 import com.android.launcher3.util.Executors.ORDERED_BG_EXECUTOR
+import com.android.launcher3.util.Executors.getTaskbarUiThread
 import com.android.quickstep.cuebar.data.repository.AmbientCueRepositoryImpl
 import com.android.quickstep.cuebar.domain.interactor.AmbientCueInteractor
 import com.android.quickstep.cuebar.logger.AmbientCueLoggerImpl
@@ -42,11 +43,10 @@ import com.android.quickstep.cuebar.ui.viewmodel.AmbientCueViewModel
 import com.android.systemui.shared.Flags.cueBarAceMigration
 import com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_IME_VISIBLE
 import com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_NOTIFICATION_PANEL_VISIBLE
+import java.io.PrintWriter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
-import java.io.PrintWriter
-import androidx.compose.ui.geometry.Rect as ComposeRect
 
 class CueBarController(private val activity: TaskbarActivityContext) :
     TaskbarControllers.LoggableTaskbarController {
@@ -54,31 +54,37 @@ class CueBarController(private val activity: TaskbarActivityContext) :
     private lateinit var taskbarControllers: TaskbarControllers
     private var pillBoundsInWindow: Rect? = null
     private var internalComposeView: ComposeView? = null
-    private val coroutineScope = CoroutineScope(MAIN_EXECUTOR.asCoroutineDispatcher())
+    private val coroutineScope = CoroutineScope(getTaskbarUiThread().asCoroutineDispatcher())
     private var mOverlayContext: TaskbarOverlayContext? = null
     private var cueBar: View? = null
     private var isHiding = false
     private val ambientCueLogger = AmbientCueLoggerImpl(activity.packageManager)
     val ambientCueRepository =
-        AmbientCueRepositoryImpl(activity, ambientCueLogger, ORDERED_BG_EXECUTOR, MAIN_EXECUTOR)
+        AmbientCueRepositoryImpl(
+            activity,
+            ambientCueLogger,
+            ORDERED_BG_EXECUTOR,
+            getTaskbarUiThread(),
+        )
     private val ambientCueInteractor = AmbientCueInteractor(ambientCueRepository)
     private val lp =
         InsettableFrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-        )
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            )
             .apply { ignoreInsets = true }
     val isExpanded: Boolean
         get() = ambientCueViewModel.isExpanded
 
     private val ambientCueViewModel: AmbientCueViewModel =
         AmbientCueViewModel(
-            ambientCueInteractor = ambientCueInteractor,
-            launcherPrefs = LauncherPrefs.get(activity),
-            scope = coroutineScope,
-            ambientCueLogger = ambientCueLogger,
-            uiExecutor = MAIN_EXECUTOR,
-        )
+                ambientCueInteractor = ambientCueInteractor,
+                launcherPrefs = LauncherPrefs.get(activity),
+                scope = coroutineScope,
+                ambientCueLogger = ambientCueLogger,
+                isDesktopFormFactor = activity.isDesktopFormFactor(),
+                uiExecutor = getTaskbarUiThread(),
+            )
             .apply {
                 onVisibilityChanged = { isCueBarVisible ->
                     onCueBarVisibilityChanged(isCueBarVisible)
@@ -238,9 +244,7 @@ class CueBarController(private val activity: TaskbarActivityContext) :
         }
     }
 
-    /**
-     * Updates the CueBar repository values based on the current [systemUiStateFlags].
-     */
+    /** Updates the CueBar repository values based on the current [systemUiStateFlags]. */
     fun updateStateForSysuiFlags(systemUiStateFlags: Long) {
         if (!cueBarAceMigration()) {
             return
@@ -249,8 +253,8 @@ class CueBarController(private val activity: TaskbarActivityContext) :
         ambientCueRepository.isImeVisible.dispatchValue(isImeVisible)
         // Note: TaskbarActivityContext.ENABLE_TASKBAR_BEHIND_SHADE is not used here, assuming
         // the notification panel always occludes the CueBar.
-        val isNotificationPanelVisible = (systemUiStateFlags and
-                SYSUI_STATE_NOTIFICATION_PANEL_VISIBLE) != 0L
+        val isNotificationPanelVisible =
+            (systemUiStateFlags and SYSUI_STATE_NOTIFICATION_PANEL_VISIBLE) != 0L
         ambientCueRepository.isOccludedBySystemUi.dispatchValue(isNotificationPanelVisible)
     }
 

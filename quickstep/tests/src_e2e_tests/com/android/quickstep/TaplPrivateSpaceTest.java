@@ -24,6 +24,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeFalse;
 
 import android.os.Process;
+import android.platform.test.rule.SkipOnDesktop;
 import android.util.Log;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -43,6 +44,7 @@ import java.io.IOException;
 import java.util.Objects;
 
 @LargeTest
+@SkipOnDesktop  // Private space is currently not available on desktop.
 @RunWith(AndroidJUnit4.class)
 public class TaplPrivateSpaceTest extends AbstractQuickStepTest {
 

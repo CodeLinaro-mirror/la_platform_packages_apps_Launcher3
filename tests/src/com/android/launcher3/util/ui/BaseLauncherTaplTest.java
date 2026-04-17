@@ -23,6 +23,8 @@ import static android.view.Display.DEFAULT_DISPLAY;
 import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentation;
 
 import static com.android.launcher3.util.Executors.MAIN_EXECUTOR;
+import static com.android.launcher3.util.ui.ActivityStartUtils.getAppPackageName;
+import static com.android.launcher3.util.ui.ActivityStartUtils.resolveSystemApp;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -31,6 +33,7 @@ import static org.junit.Assume.assumeTrue;
 import android.annotation.NonNull;
 import android.app.ActivityManager;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Point;
@@ -49,6 +52,7 @@ import androidx.test.uiautomator.By;
 import androidx.test.uiautomator.UiDevice;
 import androidx.test.uiautomator.Until;
 
+import com.android.launcher3.tapl.Background;
 import com.android.launcher3.tapl.HomeAllApps;
 import com.android.launcher3.tapl.HomeAppIcon;
 import com.android.launcher3.tapl.LauncherInstrumentation;
@@ -86,11 +90,15 @@ import java.util.concurrent.TimeUnit;
 import shark.AndroidMetadataExtractor;
 import shark.AndroidObjectInspectors;
 import shark.AndroidReferenceMatchers;
+import shark.ApplicationLeak;
 import shark.FilteringLeakingObjectFinder;
 import shark.HeapAnalysis;
+import shark.HeapAnalysisSuccess;
 import shark.HeapAnalyzer;
 import shark.HeapField;
 import shark.HeapObject.HeapInstance;
+import shark.LeakTrace;
+import shark.LeakTraceReference;
 import shark.OnAnalysisProgressListener;
 
 /**
@@ -119,7 +127,16 @@ public abstract class BaseLauncherTaplTest {
     private static final String ENUM_CLASS = Enum.class.getName();
 
     protected final UiDevice mDevice = getUiDevice();
-    protected final LauncherInstrumentation mLauncher = createLauncherInstrumentation();
+    protected final LauncherInstrumentation mDefaultDisplayLauncher =
+            createLauncherInstrumentation();
+
+    /**
+     * this is used by default for TAPL actions in tests and may be overridden if test display
+     * changes. see {@link com.android.quickstep.AbstractQuickStepTest#onTestDisplayChanged(int)}.
+     * To guarantee a TAPL action is always performed on default display launcher use
+     * {@link #mDefaultDisplayLauncher} instead.
+     */
+    protected LauncherInstrumentation mLauncher = mDefaultDisplayLauncher;
 
     @NonNull
     public static LauncherInstrumentation createLauncherInstrumentation() {
@@ -174,19 +191,28 @@ public abstract class BaseLauncherTaplTest {
                     device.executeShellCommand(
                             "am dumpheap " + device.getLauncherPackageName() + " " + fileName);
                 }
+                Log.d(TAG, "Saved leak dump, the leak is still present: "
+                        + !launcher.noLeakedUiSurfaces());
+                sDumpWasGenerated = true;
 
                 File hprofFile = new File(fileName);
                 // Make the hprof file readable for the heap analyzer.
                 device.executeShellCommand("chmod 644 " + fileName);
 
+                String referenceChain = null;
                 try {
-                    createLeakReportFromHeap(hprofFile);
+                    referenceChain = createLeakReportFromHeap(hprofFile);
                 } catch (Throwable e) {
                     Log.e(TAG, "Heap analysis failed", e);
                 }
-                Log.d(TAG, "Saved leak dump, the leak is still present: "
-                        + !launcher.noLeakedUiSurfaces());
-                sDumpWasGenerated = true;
+
+                if (referenceChain != null) {
+                    // Omit the full list of UI surfaces when a specific leak path is found to keep
+                    // the assertion message focused and concise.
+                    return "Saved memory dump and leak analysis as artifacts. "
+                            + "Path from GC root to the leaking object: " + referenceChain;
+                }
+
                 result = "saved memory dump as an artifact";
             } catch (Throwable e) {
                 Log.e(TAG, "dumpHprofData failed", e);
@@ -196,7 +222,7 @@ public abstract class BaseLauncherTaplTest {
         return result + ". Full list of UI surfaces: " + launcher.getRootedUiSurfacesList();
     }
 
-    private static void createLeakReportFromHeap(File hprofFile) {
+    private static String createLeakReportFromHeap(File hprofFile) {
         HeapAnalyzer heapAnalyzer = new HeapAnalyzer(
                 OnAnalysisProgressListener.Companion.getNO_OP());
         List<FilteringLeakingObjectFinder.LeakingObjectFilter> filters = new ArrayList<>(
@@ -248,6 +274,42 @@ public abstract class BaseLauncherTaplTest {
         } catch (IOException e) {
             Log.e(TAG, "Failed to write analysis to file", e);
         }
+
+        return getConciseLeakPath(analysis);
+    }
+
+    private static String getConciseLeakPath(HeapAnalysis analysis) {
+
+        if (!(analysis instanceof HeapAnalysisSuccess)) {
+            return null;
+        }
+
+        HeapAnalysisSuccess success = (HeapAnalysisSuccess) analysis;
+        if (success.getApplicationLeaks().isEmpty()) {
+            return null;
+        }
+
+        // We only extract the first leak to keep the assertion error message readable
+        ApplicationLeak firstLeak = success.getApplicationLeaks().get(0);
+        if (firstLeak.getLeakTraces().isEmpty()) {
+            return null;
+        }
+
+        LeakTrace trace = firstLeak.getLeakTraces().get(0);
+        List<String> pathElements = new ArrayList<>();
+
+        for (LeakTraceReference ref : trace.getReferencePath()) {
+            String className = ref.getOriginObject().getClassName();
+            if (className.startsWith("java.lang.") || className.startsWith("java.util.")) {
+                continue;
+            }
+            pathElements.add(ref.getOwningClassSimpleName()
+                    + "." + ref.getReferenceDisplayName());
+        }
+
+        pathElements.add(trace.getLeakingObject().getClassSimpleName());
+
+        return String.join(" -> ", pathElements);
     }
 
     private static HeapInstance getRef(HeapInstance instance, String className, String fieldName) {
@@ -428,6 +490,20 @@ public abstract class BaseLauncherTaplTest {
         return UiDevice.getInstance(getInstrumentation());
     }
 
+    /**
+     * Get the base container for the display associated with this test after going to Home if
+     * possible. Prefer this method over mLauncher.goHome to support tests on external displays
+     *
+     * @return a Workspace object for default display or a LaunchedAppState for non-default
+     */
+    protected Background getBaseContainer() {
+        if (mDisplayId == DEFAULT_DISPLAY) {
+            return mLauncher.goHome();
+        } else {
+            return mLauncher.getLaunchedAppState();
+        }
+    }
+
     private static void aggressivelyUnlockSysUi() {
         final UiDevice device = getUiDevice();
         for (int i = 0; i < 10 && hasSystemUiObject("keyguard_status_view"); ++i) {
@@ -541,7 +617,9 @@ public abstract class BaseLauncherTaplTest {
 
     /** Clears all recent tasks */
     public void clearAllRecentTasks() {
-        mLauncher.goHome();
+        if (mDisplayId == DEFAULT_DISPLAY) {
+            mLauncher.goHome();
+        }
         try {
             getUiDevice().executeShellCommand(
                     "dumpsys activity service SystemUIService WMShell desktopmode removeAllDesks");
@@ -550,5 +628,22 @@ public abstract class BaseLauncherTaplTest {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    protected void startAppFast(String pkg) {
+        ActivityStartUtils.startAppFast(pkg, mDisplayId);
+    }
+
+    protected void startTestActivity(int activityNumber) {
+        ActivityStartUtils.startTestActivity(activityNumber, mDisplayId);
+    }
+
+    private static final String CALCULATOR_APP_PACKAGE =
+            resolveSystemApp(Intent.CATEGORY_APP_CALCULATOR);
+
+    protected void startTestApps() {
+        startAppFast(getAppPackageName());
+        startAppFast(CALCULATOR_APP_PACKAGE);
+        startTestActivity(2);
     }
 }

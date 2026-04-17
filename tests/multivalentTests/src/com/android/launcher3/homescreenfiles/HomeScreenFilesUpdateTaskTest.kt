@@ -22,7 +22,7 @@ import android.os.UserHandle
 import com.android.launcher3.InvariantDeviceProfile
 import com.android.launcher3.LauncherModel
 import com.android.launcher3.LauncherSettings.Favorites.CONTAINER_DESKTOP
-import com.android.launcher3.Utilities.qsbOnFirstScreen
+import com.android.launcher3.Workspace
 import com.android.launcher3.WorkspaceLayoutManager.FIRST_SCREEN_ID
 import com.android.launcher3.icons.BitmapInfo
 import com.android.launcher3.icons.IconCache
@@ -158,25 +158,17 @@ class HomeScreenFilesUpdateTaskTest {
         // Mock space finding for [itemToAdd].
         whenever(
                 workspaceItemSpaceFinder.findSpaceForItem(
-                    argThat { knownItems ->
-                        if (qsbOnFirstScreen()) {
-                            knownItems.size == 1 &&
-                                with(knownItems[0]) {
-                                    cellX == 0 &&
-                                        cellY == 0 &&
-                                        container == CONTAINER_DESKTOP &&
-                                        screenId == FIRST_SCREEN_ID &&
-                                        spanX == idp.numSearchContainerColumns &&
-                                        spanY == 1
-                                }
-                        } else {
-                            knownItems.isEmpty()
-                        }
-                    },
+                    argThat { knownItems -> knownItems.isEmpty() },
                     eq(itemToAdd.spanX),
                     eq(itemToAdd.spanY),
                     eq(IntSet()),
-                    eq(itemToAdd.screenId),
+                    eq(
+                        WorkspaceItemCoordinates(
+                            Workspace.FIRST_SCREEN_ID,
+                            /* cellX=*/ 0,
+                            /* cellY=*/ 0,
+                        )
+                    ),
                 )
             )
             .thenReturn(
@@ -245,30 +237,20 @@ class HomeScreenFilesUpdateTaskTest {
         // Mock space finding for [itemToAdd].
         whenever(
                 workspaceItemSpaceFinder.findSpaceForItem(
-                    argThat { knownItems ->
-                        if (qsbOnFirstScreen()) {
-                            knownItems.size == 1 &&
-                                with(knownItems[0]) {
-                                    cellX == 0 &&
-                                        cellY == 0 &&
-                                        container == CONTAINER_DESKTOP &&
-                                        screenId == FIRST_SCREEN_ID &&
-                                        spanX == idp.numSearchContainerColumns &&
-                                        spanY == 1
-                                }
-                        } else {
-                            knownItems.isEmpty()
-                        }
-                    },
+                    argThat { knownItems -> knownItems.isEmpty() },
                     eq(itemToAdd.spanX),
                     eq(itemToAdd.spanY),
                     eq(IntSet()),
-                    eq(itemToAdd.screenId),
+                    eq(
+                        WorkspaceItemCoordinates(
+                            itemToAdd.screenId,
+                            itemToAdd.cellX,
+                            itemToAdd.cellY,
+                        )
+                    ),
                 )
             )
-            .thenReturn(
-                WorkspaceItemCoordinates(itemToAdd.screenId, itemToAdd.cellX, itemToAdd.cellY)
-            )
+            .thenAnswer { it.getArgument(4) }
 
         // Mock data model.
         items.add(itemToIgnore)
@@ -279,7 +261,13 @@ class HomeScreenFilesUpdateTaskTest {
             createUpdate(
                 filesByUri,
                 HomeScreenFilesUpdate.Extras.builder()
-                    .findSpaceStartingFromScreenId(itemToAdd.screenId)
+                    .findSpaceStartingFrom(
+                        WorkspaceItemCoordinates(
+                            itemToAdd.screenId,
+                            itemToAdd.cellX,
+                            itemToAdd.cellY,
+                        )
+                    )
                     .build(),
             )
         createTask(update).execute()

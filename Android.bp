@@ -318,11 +318,14 @@ android_library {
         "launcher-executors-module",
         "mediaprovider_exported_aconfig_flag_lib",
         "widget_picker_component",
+        "workspace-functions",
         // Compose dependencies
         "androidx.compose.runtime_runtime",
         "androidx.compose.material3_material3",
         "androidx.compose.ui_ui-tooling-preview",
         "androidx.compose.ui_ui-tooling",
+        "androidx.navigation_navigation-compose",
+        "cuebarlib",
     ],
     manifest: "AndroidManifest-common.xml",
     sdk_version: "current",
@@ -410,7 +413,9 @@ android_library {
         "protolog-group",
         "displaylib",
         "com.android.window.flags.window-aconfig-java",
+        "uilatencystats_flags_core_java_lib",
         "com.android.extensions.computercontrol",
+        "personalcontext_ace_common",
         // Compose dependencies
         "androidx.compose.runtime_runtime",
         "androidx.compose.material3_material3",
@@ -418,6 +423,7 @@ android_library {
         "androidx.compose.ui_ui-tooling-preview",
         "androidx.compose.ui_ui-tooling",
         "PlatformComposeCore",
+        "PlatformComposeSceneTransitionLayout",
     ],
     manifest: "quickstep/AndroidManifest.xml",
     min_sdk_version: "current",
@@ -426,6 +432,7 @@ android_library {
     },
     flags_packages: [
         "com.android.window.flags.window-aconfig",
+        "uilatencystats_flags",
     ],
 }
 
@@ -528,6 +535,7 @@ android_app {
         proguard_flags_files: [":launcher-proguard-rules"],
         enabled: true,
         shrink_resources: true,
+        ignore_warnings: false,
     },
 
     platform_apis: true,
@@ -576,6 +584,7 @@ android_app {
         proguard_flags_files: ["proguard.flags"],
         enabled: true,
         shrink_resources: true,
+        ignore_warnings: false,
     },
 
     privileged: true,
@@ -613,6 +622,7 @@ android_app {
         proguard_flags_files: ["proguard.flags"],
         enabled: true,
         shrink_resources: true,
+        ignore_warnings: false,
     },
 
     privileged: true,

@@ -26,7 +26,6 @@ import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_Q
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_STATUS_BAR_KEYGUARD_SHOWING;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_STATUS_BAR_KEYGUARD_SHOWING_OCCLUDED;
 
-import android.annotation.AnyThread;
 import android.annotation.BinderThread;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -44,6 +43,7 @@ import com.android.launcher3.taskbar.TaskbarSharedState;
 import com.android.launcher3.taskbar.bubbles.stashing.BubbleStashController;
 import com.android.launcher3.util.Executors.SimpleThreadFactory;
 import com.android.launcher3.util.MultiPropertyFactory;
+import com.android.launcher3.util.SafeCloseable;
 import com.android.quickstep.SystemUiProxy;
 import com.android.systemui.shared.system.QuickStepContract.SystemUiStateFlags;
 import com.android.wm.shell.Flags;
@@ -52,6 +52,8 @@ import com.android.wm.shell.shared.bubbles.BubbleBarLocation;
 import com.android.wm.shell.shared.bubbles.BubbleBarUpdate;
 import com.android.wm.shell.shared.bubbles.BubbleInfo;
 import com.android.wm.shell.shared.bubbles.RemovedBubble;
+import com.android.wm.shell.shared.bubbles.logging.BubbleLog;
+import com.android.wm.shell.shared.bubbles.logging.LogcatDebugLogger;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -117,7 +119,8 @@ public class BubbleBarController {
     private static final Executor BUBBLE_STATE_EXECUTOR = Executors.newSingleThreadExecutor(
             new SimpleThreadFactory("BubbleStateUpdates-", THREAD_PRIORITY_BACKGROUND));
     private final SystemUiProxy mSystemUiProxy;
-    private final BubbleBarListener mListener;
+
+    private SafeCloseable mListenerCleanup;
 
     private BubbleBarItem mSelectedBubble;
 
@@ -131,7 +134,6 @@ public class BubbleBarController {
     private int mLastSentBubbleBarTopToScreenBottom;
 
     private boolean mIsImeVisible = false;
-
     /**
      * Similar to {@link BubbleBarUpdate} but rather than {@link BubbleInfo}s it uses
      * {@link BubbleBarBubble}s so that it can be used to update the views.
@@ -179,13 +181,16 @@ public class BubbleBarController {
         mContext = context;
         mBarView = bubbleView; // Need the view for inflating bubble views.
 
-        mListener = new BubbleBarListener(this);
         mSystemUiProxy = SystemUiProxy.INSTANCE.get(context);
+        BubbleLog.addLogger(new LogcatDebugLogger());
     }
 
     public void onDestroy() {
-        mListener.clear();
-        mSystemUiProxy.setBubblesListener(null);
+        if (mListenerCleanup != null) {
+            mListenerCleanup.close();
+            mListenerCleanup = null;
+        }
+
         // Saves bubble bar state
         mSharedState.bubbleBarExpanded = mBubbleBarViewController.isExpanded();
         mSharedState.bubbleBarStashed = mBubbleStashController.isStashed();
@@ -231,7 +236,9 @@ public class BubbleBarController {
             mBubbleBarLocationListener.onBubbleBarLocationUpdated(
                     mBubbleBarViewController.getBubbleBarLocation());
             if (sBubbleBarEnabled) {
-                mSystemUiProxy.setBubblesListener(mListener);
+                if (mListenerCleanup != null) mListenerCleanup.close();
+                mListenerCleanup = mSystemUiProxy.getBubblesListeners()
+                        .register(new BubbleBarListener(this));
                 mSystemUiProxy.setHasBubbleBar(true);
             }
         });
@@ -244,9 +251,16 @@ public class BubbleBarController {
         mIsImeVisible = (flags & SYSUI_STATE_IME_VISIBLE) != 0 && isImeDocked();
 
         boolean hideBubbleBar = (flags & MASK_HIDE_BUBBLE_BAR) != 0 || mIsImeVisible;
-        mBubbleBarViewController.setHiddenForSysui(hideBubbleBar);
-
         boolean hideHandleView = (flags & MASK_HIDE_HANDLE_VIEW) != 0 || mIsImeVisible;
+        updateHiddenState(hideBubbleBar, hideHandleView);
+
+        boolean sysuiLocked = (flags & MASK_SYSUI_LOCKED) != 0;
+        mBubbleStashController.setSysuiLocked(sysuiLocked);
+        mBubbleBarViewController.setSysuiLocked(sysuiLocked);
+    }
+
+    private void updateHiddenState(boolean hideBubbleBar, boolean hideHandleView) {
+        mBubbleBarViewController.setHiddenForSysui(hideBubbleBar);
         mBubbleStashedHandleViewController.ifPresent(controller -> {
             controller.setHiddenForSysui(hideHandleView);
             MultiPropertyFactory<View>.MultiProperty handleViewAlpha =
@@ -260,17 +274,30 @@ public class BubbleBarController {
                 handleViewAlpha.setValue(1f);
             }
         });
-
-        boolean sysuiLocked = (flags & MASK_SYSUI_LOCKED) != 0;
-        mBubbleStashController.setSysuiLocked(sysuiLocked);
-        mBubbleBarViewController.setSysuiLocked(sysuiLocked);
         if (mIsImeVisible) {
             mBubbleBarViewController.onImeVisible();
         }
     }
 
+    /**
+     * Should be called when Ime inset is changed to determine if bubble bar should be hidden.
+     */
+    public void onImeInsetChanged() {
+        if (!Flags.fixBubbleBarStashingWithHardwareKeyboard()) {
+            return;
+        }
+        if (isImeDocked() && !mIsImeVisible) {
+            mIsImeVisible = true;
+            updateHiddenState(true, true);
+        }
+    }
+
+    /**
+     * Returns whether the IME is visible and docked.
+     */
     private boolean isImeDocked() {
-        if (mContext instanceof TaskbarActivityContext) {
+        if (Flags.fixBubbleBarStashingWithHardwareKeyboard()
+                && mContext instanceof TaskbarActivityContext) {
             return ((TaskbarActivityContext) mContext).isImeDocked();
         }
         return true;
@@ -288,11 +315,9 @@ public class BubbleBarController {
             Log.e(TAG, "Update info missing from bubble state change");
             return;
         }
-        if (Flags.sendBubbleRootTaskIdToLauncher()) {
-            if (update.bubbleRootTaskId != ActivityTaskManager.INVALID_TASK_ID) {
-                // Cache bubble root task id if it is set in the update
-                BubbleHelper.updateBubbleRootTaskId(update.bubbleRootTaskId);
-            }
+        if (update.bubbleRootTaskId != ActivityTaskManager.INVALID_TASK_ID) {
+            // Cache bubble root task id if it is set in the update
+            BubbleHelper.updateBubbleRootTaskId(update.bubbleRootTaskId);
         }
         BubbleBarViewUpdate viewUpdate = new BubbleBarViewUpdate(update);
         if (update.addedBubble != null
@@ -718,7 +743,7 @@ public class BubbleBarController {
      */
     private static class BubbleBarListener extends IBubblesListener.Stub {
 
-        private @Nullable BubbleBarController mController;
+        private final BubbleBarController mController;
 
         BubbleBarListener(@NonNull BubbleBarController controller) {
             mController = controller;
@@ -747,16 +772,6 @@ public class BubbleBarController {
             if (controller != null) {
                 controller.showBubbleBarDropTargetAt(location);
             }
-        }
-
-        /**
-         * Since the lifecycle of this binder obj depends on remote process's GC, calling this
-         * method will allow Launcher process GC {@link mController} earlier, and also avoid false
-         * positive leak signal from leak canary.
-         */
-        @AnyThread
-        private void clear() {
-            mController = null;
         }
     }
 }

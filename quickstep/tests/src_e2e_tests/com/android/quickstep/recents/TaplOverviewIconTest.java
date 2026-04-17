@@ -15,10 +15,7 @@
  */
 package com.android.quickstep.recents;
 
-import static com.android.launcher3.util.ui.ActivityStartUtils.getAppPackageName;
 import static com.android.launcher3.util.ui.ActivityStartUtils.resolveSystemApp;
-import static com.android.launcher3.util.ui.ActivityStartUtils.startAppFast;
-import static com.android.launcher3.util.ui.ActivityStartUtils.startTestActivity;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -29,6 +26,7 @@ import android.platform.test.annotations.PlatinumTest;
 import com.android.launcher3.tapl.Overview;
 import com.android.launcher3.tapl.OverviewTask.OverviewTaskContainer;
 import com.android.launcher3.tapl.OverviewTaskMenu;
+import com.android.launcher3.util.ui.BaseLauncherTaplTest.AllowInRecentsWindowTests;
 import com.android.quickstep.AbstractQuickStepTest;
 import com.android.quickstep.util.SplitScreenTestUtils;
 
@@ -38,6 +36,7 @@ import org.junit.Test;
  * This test run in both Out of process (Oop) and in-process (Ipc).
  * Tests the app Icon in overview.
  */
+@AllowInRecentsWindowTests
 public class TaplOverviewIconTest extends AbstractQuickStepTest {
 
     private static final String CALCULATOR_APP_PACKAGE =
@@ -62,12 +61,6 @@ public class TaplOverviewIconTest extends AbstractQuickStepTest {
                 "Launcher activity is the top activity; expecting another activity to be the top "
                         + "one",
                 isInLaunchedApp(launcher)));
-    }
-
-    private void startTestApps() {
-        startAppFast(getAppPackageName());
-        startAppFast(CALCULATOR_APP_PACKAGE);
-        startTestActivity(2);
     }
 
     @Test

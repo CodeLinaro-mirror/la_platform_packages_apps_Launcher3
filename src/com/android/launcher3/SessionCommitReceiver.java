@@ -32,6 +32,7 @@ import com.android.launcher3.model.ItemInstallQueue;
 import com.android.launcher3.model.SerializedItemItem;
 import com.android.launcher3.pm.InstallSessionHelper;
 import com.android.launcher3.pm.UserCache;
+import com.android.launcher3.util.DefaultsValueProvider;
 import com.android.launcher3.util.Executors;
 
 import java.util.Locale;
@@ -103,13 +104,14 @@ public class SessionCommitReceiver extends BroadcastReceiver {
     /**
      * Returns whether adding Installed App Icons to home screen is allowed or not.
      * Not allowed when:
-     * - User belongs to {@link com.android.launcher3.util.UserIconInfo.TYPE_PRIVATE} or
+     * - User belongs to {@link com.android.launcher3.util.UserType.PRIVATE} or
      * - Home Settings preference to add App Icons on Home Screen is set as disabled
      */
     public static boolean isEnabled(Context context, UserHandle user) {
         if (user != null && UserCache.getInstance(context).getUserInfo(user).isPrivate()) {
             return false;
         }
-        return LauncherPrefs.getPrefs(context).getBoolean(ADD_ICON_PREFERENCE_KEY, true);
+        return LauncherPrefs.getPrefs(context).getBoolean(ADD_ICON_PREFERENCE_KEY,
+                DefaultsValueProvider.get(context).getAddIconToHome());
     }
 }

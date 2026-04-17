@@ -39,6 +39,10 @@
     public float getProgress();
 }
 
+# The Jetpack animation-tooling-internal library is internal and
+# unavailable to published libraries.
+-dontwarn androidx.compose.animation.tooling.**
+
 # BUG(70852369): Surpress additional warnings after changing from Proguard to R8
 -dontwarn android.app.**
 -dontwarn android.graphics.**
@@ -62,4 +66,11 @@
 }
 -keep class androidx.lifecycle.LifecycleRegistry {
   *;
+}
+
+# Keep all classes annotated with @AppFunctionSerializable and their members.
+# These classes are serialized and their structure must be preserved.
+-keep @androidx.appfunctions.AppFunctionSerializable class * {
+    <fields>;
+    <init>(...);
 }

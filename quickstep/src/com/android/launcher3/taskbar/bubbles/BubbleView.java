@@ -32,6 +32,7 @@ import android.widget.ImageView;
 
 import androidx.constraintlayout.widget.ConstraintLayout;
 
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.launcher3.R;
 import com.android.launcher3.icons.DotRenderer;
 import com.android.launcher3.icons.DotRenderer.IconShapeInfo;
@@ -57,6 +58,7 @@ public class BubbleView extends ConstraintLayout {
     private float mDragTranslationX;
     private float mOffsetX;
 
+    @Nullable
     private DotRenderer mDotRenderer;
     private final DotRenderer.DrawParams mDrawParams;
     private int mDotColor;
@@ -180,7 +182,9 @@ public class BubbleView extends ConstraintLayout {
         mDrawParams.iconBounds = mTempBounds;
         mDrawParams.scale = mDotScale;
 
-        mDotRenderer.draw(canvas, mDrawParams);
+        if (mDotRenderer != null) {
+            mDotRenderer.draw(canvas, mDrawParams);
+        }
     }
 
     @Override
@@ -248,7 +252,8 @@ public class BubbleView extends ConstraintLayout {
         return false;
     }
 
-    void setController(@Nullable Controller controller) {
+    @VisibleForTesting
+    public void setController(@Nullable Controller controller) {
         mController = controller;
     }
 

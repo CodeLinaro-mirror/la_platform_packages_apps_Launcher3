@@ -105,9 +105,11 @@ import com.android.quickstep.views.RecentsViewContainer;
 import com.android.quickstep.views.RecentsViewContainerInteractor;
 import com.android.quickstep.window.RecentsWindowManager;
 import com.android.systemui.shared.statusbar.phone.BarTransitions;
+import com.android.systemui.shared.system.ActivityManagerWrapper;
 import com.android.systemui.shared.system.QuickStepContract;
 import com.android.systemui.shared.system.QuickStepContract.SystemUiStateFlags;
 import com.android.systemui.unfold.util.ScopedUnfoldTransitionProgressProvider;
+import com.android.wm.shell.shared.desktopmode.DesktopState;
 
 import kotlin.Unit;
 
@@ -142,6 +144,8 @@ public class TaskbarManagerImpl {
     private final int mPrimaryDisplayId;
     private final TaskbarNavButtonCallbacks mNavCallbacks;
     private final PostUnlockObject<InvariantDeviceProfile> mUnlockedIDP;
+    private final ActivityManagerWrapper mActivityManagerWrapper;
+    private final DesktopState mDesktopState;
 
     // TODO: Remove this during the connected displays lifecycle refactor.
     private final PerDisplayTaskbarResource mPrimaryResource;
@@ -339,7 +343,9 @@ public class TaskbarManagerImpl {
             LauncherPrefs launcherPrefs,
             SystemUiProxy systemUiProxy,
             PostUnlockObject<InvariantDeviceProfile> unlockedIdp,
-            @Named(CONNECTION_CLEANER) ThreadSafeRunnableList cleanupTasks) {
+            @Named(CONNECTION_CLEANER) ThreadSafeRunnableList cleanupTasks,
+            ActivityManagerWrapper activityManagerWrapper,
+            DesktopState desktopState) {
         Preconditions.assertTaskbarUiThread();
         mBaseContext = context;
         mPrimaryDisplayId = mBaseContext.getDisplayId();
@@ -348,6 +354,8 @@ public class TaskbarManagerImpl {
         mDisplayManager = mBaseContext.getSystemService(DisplayManager.class);
         mSystemUiProxy = systemUiProxy;
         mUnlockedIDP = unlockedIdp;
+        mActivityManagerWrapper = activityManagerWrapper;
+        mDesktopState = desktopState;
 
         // Only initialize this context when the user is truly locked. Thus, check unlock state
         // separately from mUserUnlocked, which starts at false until TIS calls onUserUnlocked().
@@ -651,7 +659,8 @@ public class TaskbarManagerImpl {
     public void setActivityInteractor(@NonNull ActivityInteractor activityInteractor) {
         mPrimaryResource.debugMsg(
                 "setActivityInteractor: mActivityInteractor=" + mActivityInteractor);
-        if (mActivityInteractor == activityInteractor) {
+        if (mActivityInteractor == activityInteractor
+                || activityInteractor.isActivitySameObj(mActivityInteractor)) {
             mPrimaryResource.debugMsg("setActivityInteractor: No need to set activityInteractor!");
             return;
         }
@@ -776,7 +785,9 @@ public class TaskbarManagerImpl {
         Trace.beginSection(traceNameTruncated);
         int displayId = resource.getDisplayId();
 
+        TaskbarActivityContext taskbar = null;
         try {
+            resource.getCreateTaskbarLatencyLogger().logStart();
             resource.debugMsg("recreateTaskbarForDisplay: getting device profile");
 
             DeviceProfile dp;
@@ -812,7 +823,11 @@ public class TaskbarManagerImpl {
 
             if (!isTaskbarEnabled || !isLargeScreenTaskbar || !displayExists) {
                 mSystemUiProxy.notifyTaskbarStatus(/* visible */ false, /* stashed */ false);
-                mSystemUiProxy.setHasBubbleBar(false);
+                // Do not update bubble bar unless it is the primary display
+                // As bubbles are only available on primary display
+                if (displayId == mPrimaryDisplayId) {
+                    mSystemUiProxy.setHasBubbleBar(false);
+                }
                 if (!isTaskbarEnabled || !displayExists) {
                     resource.debugMsg(
                             "recreateTaskbarForDisplay: exiting bc (!isTaskbarEnabled || "
@@ -822,7 +837,7 @@ public class TaskbarManagerImpl {
             }
 
             resource.debugMsg("recreateTaskbarForDisplay: creating taskbar");
-            TaskbarActivityContext taskbar = createTaskbarActivityContext(dp, resource);
+            taskbar = createTaskbarActivityContext(dp, resource);
             if (taskbar == null) {
                 resource.debugMsg("recreateTaskbarForDisplay: new taskbar instance is null!");
                 return;
@@ -833,7 +848,7 @@ public class TaskbarManagerImpl {
             sharedState.allAppsVisible = sharedState.allAppsVisible && isLargeScreenTaskbar;
             Trace.beginSection("taskbar.init");
             try {
-                taskbar.init(sharedState, duration);
+                taskbar.init(sharedState, mUserUnlocked, duration);
             } finally {
                 Trace.endSection();
             }
@@ -859,6 +874,9 @@ public class TaskbarManagerImpl {
             taskbar.notifyUpdateLayoutParams();
         } finally {
             Trace.endSection();
+            if (taskbar != null) {
+                resource.getCreateTaskbarLatencyLogger().logEnd(taskbar.getStatsLogManager());
+            }
         }
     }
 
@@ -895,8 +913,13 @@ public class TaskbarManagerImpl {
     }
 
     public void onLongPressHomeEnabled(boolean assistantLongPressEnabled) {
-        mResources.forEach(res ->
-                res.getSharedState().assistantLongPressEnabled = assistantLongPressEnabled);
+        mResources.forEach(res -> {
+            res.getSharedState().assistantLongPressEnabled = assistantLongPressEnabled;
+            TaskbarActivityContext taskbar = res.getTaskbar();
+            if (taskbar != null) {
+                taskbar.onLongPressHomeEnabledChanged();
+            }
+        });
     }
 
     /**
@@ -1123,7 +1146,8 @@ public class TaskbarManagerImpl {
             TaskbarActivityContext taskbarActivityContext =
                     new TaskbarActivityContext(displayId, windowContext, navigationBarPanelContext,
                             dp, resource.getNavButtonController(), mUnfoldProgressProvider,
-                            !resource.isExternalDisplay(), getPrimaryDisplayId(), mSystemUiProxy);
+                            !resource.isExternalDisplay(), getPrimaryDisplayId(),
+                            mSystemUiProxy, mActivityManagerWrapper, mDesktopState);
             mAmbientCueRepository = taskbarActivityContext.getControllers().cueBarController
                     .getAmbientCueRepository();
             return taskbarActivityContext;

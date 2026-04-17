@@ -33,6 +33,7 @@ import com.android.launcher3.anim.AnimatedFloat
 import com.android.launcher3.apppairs.AppPairIcon
 import com.android.launcher3.dragndrop.DragOptions
 import com.android.launcher3.folder.FolderIcon
+import com.android.launcher3.homescreenfiles.HomeScreenFilesRenameDialogFactory
 import com.android.launcher3.integration.util.LauncherActivityScenarioRule
 import com.android.launcher3.model.data.ItemInfo
 import com.android.launcher3.model.data.WorkspaceItemInfo
@@ -60,7 +61,7 @@ class PopupControllerTest {
 
     private val popupDataRepository = FakePopupDataRepository()
 
-    private val popupDataSource = PopupDataSource()
+    private val popupDataSource = PopupDataSource(mock<HomeScreenFilesRenameDialogFactory>())
 
     private val launcherDragController = launcherActivity.getFromLauncher { it.dragController }!!
 

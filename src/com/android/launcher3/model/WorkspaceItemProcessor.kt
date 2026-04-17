@@ -225,8 +225,7 @@ class WorkspaceItemProcessor(
         }
 
         val isPreArchivedShortcut =
-            Flags.restoreArchivedShortcuts() &&
-                appInfoWrapper.isArchived() &&
+            appInfoWrapper.isArchived() &&
                 c.itemType == Favorites.ITEM_TYPE_DEEP_SHORTCUT &&
                 c.restoreFlag != 0
 
@@ -556,6 +555,8 @@ class WorkspaceItemProcessor(
         val inflationResult = widgetInflater.inflateAppWidget(appWidgetInfo)
         var shouldUpdate = inflationResult.isUpdate
         val lapi = inflationResult.widgetInfo
+        appWidgetInfo.contentDescription = lapi?.loadLabel(context.packageManager)
+
         FileLog.d(
             TAG,
             "processWidget: id=${c.id}" +

@@ -23,7 +23,6 @@ import android.content.res.Resources;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
-import android.text.InputType;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.DragEvent;
@@ -221,16 +220,6 @@ public abstract class ButtonDropTarget extends TextView
     }
 
     @Override
-    public void onDragEnterWindow(DropTarget.DragObject dragObject, DragOptions options) {
-        // No-op
-    }
-
-    @Override
-    public void onDragExitWindow(DropTarget.DragObject dragObject, DragOptions options) {
-        // No-op
-    }
-
-    @Override
     public final boolean acceptDrop(DragObject dragObject) {
         return supportsDrop(dragObject.dragInfo);
     }
@@ -379,12 +368,6 @@ public abstract class ButtonDropTarget extends TextView
             mTextMultiLine = isMultiLine;
             setSingleLine(!isMultiLine);
             setMaxLines(isMultiLine ? MAX_LINES_TEXT_MULTI_LINE : MAX_LINES_TEXT_SINGLE_LINE);
-            int inputType = InputType.TYPE_CLASS_TEXT;
-            if (isMultiLine) {
-                inputType |= InputType.TYPE_TEXT_FLAG_MULTI_LINE;
-
-            }
-            setInputType(inputType);
         }
     }
 

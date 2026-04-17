@@ -26,6 +26,7 @@ import platform.test.runner.parameterized.Parameters
 @RunWith(ParameterizedAndroidJunit4::class)
 class PhoneLandscapeNavLayoutterTest(private val order: LandscapeButtonOrder) :
     NavButtonLayoutterTest() {
+
     @Test
     fun addThreeButtons_expectedOrder() {
         val layoutter = createLayoutter()

@@ -45,6 +45,7 @@ import static com.android.launcher3.LauncherState.OVERVIEW_SPLIT_SELECT;
 import static com.android.launcher3.Utilities.isRtl;
 import static com.android.launcher3.anim.AnimatorListeners.forEndCallback;
 import static com.android.launcher3.compat.AccessibilityManagerCompat.sendCustomAccessibilityEvent;
+import static com.android.launcher3.desktop.DesktopStateProvider.getDesktopState;
 import static com.android.launcher3.display.LauncherDisplayInfo.CHANGE_ACTIVE_SCREEN;
 import static com.android.launcher3.display.LauncherDisplayInfo.CHANGE_NAVIGATION_MODE;
 import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCHER_APP_LAUNCH_TAP;
@@ -239,7 +240,6 @@ import com.android.wm.shell.shared.bubbles.BubbleFeatureConfig;
 import com.android.wm.shell.shared.bubbles.BubbleFeatureConfigImpl;
 import com.android.wm.shell.shared.bubbles.logging.EntryPoint;
 import com.android.wm.shell.shared.desktopmode.DesktopModeStatus;
-import com.android.wm.shell.shared.desktopmode.DesktopState;
 
 import kotlin.Unit;
 
@@ -380,8 +380,7 @@ public class QuickstepLauncher extends Launcher implements RecentsViewContainer,
         mTaskbarUiState = TaskbarUiStateMonitor.INSTANCE.get(this)
                 .getTaskbarUiState(getDisplayId());
 
-        mBubbleFeatureConfig = new BubbleFeatureConfigImpl(this,
-                DesktopState.getInstance(this));
+        mBubbleFeatureConfig = new BubbleFeatureConfigImpl(this, getDesktopState(this));
     }
 
     @Override
@@ -523,8 +522,7 @@ public class QuickstepLauncher extends Launcher implements RecentsViewContainer,
         int container = itemInfo.container;
         if (canPinAppWithContextMenu()
                 && DisplayController.getInfo(this).getShowDesktopTaskbarForFreeformDisplay()
-                && (container == CONTAINER_ALL_APPS
-                || container == CONTAINER_ALL_APPS_PREDICTION)) {
+                && canContainerHavePinContextMenu(container)) {
             TaskbarInteractor ti = mTaskbarInteractor;
             int maxPinnableCount = ti != null ? ti.getMaxPinnableCount() : -1;
             boolean supportPinAppsOverflow = ti != null && ti.getSupportsPinnedAppsOverflow();
@@ -557,6 +555,13 @@ public class QuickstepLauncher extends Launcher implements RecentsViewContainer,
             shortcuts.add(APP_LOCK);
         }
         return shortcuts.stream();
+    }
+
+    private boolean canContainerHavePinContextMenu(int container) {
+        return container == CONTAINER_ALL_APPS
+                || container == CONTAINER_ALL_APPS_PREDICTION
+                || container == CONTAINER_DESKTOP
+                || container > 0; // container > 0 means the app is inside a folder.
     }
 
     private boolean canPinAppWithContextMenu() {
@@ -1153,8 +1158,13 @@ public class QuickstepLauncher extends Launcher implements RecentsViewContainer,
     }
 
     private void handlePendingActivityRequest() {
+        // Check to see whether we're currently animating between states. If we are, ensure the
+        // ProxyActivity isn't cancelled while the Taskbar/Recents animation is still in progress.
+        boolean isTransitionRunning = getStateManager().isInTransition();
+
         if (mPendingActivityRequestCode != -1 && isInState(NORMAL)
-                && ((getActivityFlags() & ACTIVITY_STATE_DEFERRED_RESUMED) != 0)) {
+                && ((getActivityFlags() & ACTIVITY_STATE_DEFERRED_RESUMED) != 0)
+                && !isTransitionRunning) {
             // Remove any active ProxyActivityStarter task and send RESULT_CANCELED to Launcher.
             onActivityResult(mPendingActivityRequestCode, RESULT_CANCELED, null);
             // ProxyActivityStarter is started with clear task to reset the task after which it
@@ -1458,7 +1468,7 @@ public class QuickstepLauncher extends Launcher implements RecentsViewContainer,
 
     @Override
     public boolean shouldShowHomeBehindDesktop() {
-        return DesktopState.getInstance(this).getShouldShowHomeBehindDesktop();
+        return getDesktopState(this).getShouldShowHomeBehindDesktop();
     }
 
     @Override

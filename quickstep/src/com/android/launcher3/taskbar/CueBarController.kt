@@ -18,6 +18,7 @@ package com.android.launcher3.taskbar
 
 import android.graphics.Rect
 import android.graphics.Region
+import android.os.Trace
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
@@ -33,8 +34,10 @@ import com.android.launcher3.LauncherPrefs
 import com.android.launcher3.taskbar.overlay.TaskbarOverlayContext
 import com.android.launcher3.util.Executors.ORDERED_BG_EXECUTOR
 import com.android.launcher3.util.Executors.getTaskbarUiThread
+import android.service.personalcontext.PersonalContextManager
 import com.android.quickstep.cuebar.data.repository.AmbientCueRepositoryImpl
 import com.android.quickstep.cuebar.domain.interactor.AmbientCueInteractor
+import com.android.quickstep.cuebar.logger.AmbientCueAceLogger
 import com.android.quickstep.cuebar.logger.AmbientCueLoggerImpl
 import com.android.quickstep.cuebar.ui.AmbientCueContainer
 import com.android.quickstep.cuebar.ui.utils.AmbientCueAnimationState
@@ -58,11 +61,16 @@ class CueBarController(private val activity: TaskbarActivityContext) :
     private var mOverlayContext: TaskbarOverlayContext? = null
     private var cueBar: View? = null
     private var isHiding = false
+    // Deprecated, please use ambientCueAceLogger instead.
     private val ambientCueLogger = AmbientCueLoggerImpl(activity.packageManager)
+    private val personalContextManager: PersonalContextManager? =
+        activity.getSystemService(PersonalContextManager::class.java)
+    private val ambientCueAceLogger = AmbientCueAceLogger(personalContextManager)
     val ambientCueRepository =
         AmbientCueRepositoryImpl(
             activity,
             ambientCueLogger,
+            ambientCueAceLogger,
             ORDERED_BG_EXECUTOR,
             getTaskbarUiThread(),
         )
@@ -76,12 +84,16 @@ class CueBarController(private val activity: TaskbarActivityContext) :
     val isExpanded: Boolean
         get() = ambientCueViewModel.isExpanded
 
+    val isVisible: Boolean
+        get() = ambientCueViewModel.isVisible
+
     private val ambientCueViewModel: AmbientCueViewModel =
         AmbientCueViewModel(
                 ambientCueInteractor = ambientCueInteractor,
                 launcherPrefs = LauncherPrefs.get(activity),
                 scope = coroutineScope,
                 ambientCueLogger = ambientCueLogger,
+                ambientCueAceLogger = ambientCueAceLogger,
                 isDesktopFormFactor = activity.isDesktopFormFactor(),
                 uiExecutor = getTaskbarUiThread(),
             )
@@ -112,6 +124,17 @@ class CueBarController(private val activity: TaskbarActivityContext) :
             AmbientCueJankMonitor(InteractionJankMonitor.getInstance(), composeView)
         cueBar =
             composeView.apply {
+                addOnAttachStateChangeListener(
+                    object : View.OnAttachStateChangeListener {
+                        override fun onViewAttachedToWindow(v: View) {
+                            Trace.beginAsyncSection("CueBarAttached", 0)
+                        }
+
+                        override fun onViewDetachedFromWindow(v: View) {
+                            Trace.endAsyncSection("CueBarAttached", 0)
+                        }
+                    }
+                )
                 setViewCompositionStrategy(
                     ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
                 )
@@ -148,12 +171,24 @@ class CueBarController(private val activity: TaskbarActivityContext) :
             }
     }
 
+    private fun animateStashHandleAlpha(show: Boolean) {
+        val stashedHandleAlpha =
+            taskbarControllers.stashedHandleViewController.stashedHandleAlpha.get(
+                StashedHandleViewController.ALPHA_INDEX_CUEBAR_HIDDEN
+            )
+        stashedHandleAlpha
+            .animateToValue(if (show) 1f else 0f)
+            .setDuration(STASHED_HANDLE_ALPHA_ANIMATION_DURATION_MS)
+            .start()
+    }
+
     private fun handleAnimationStateChange(state: AmbientCueAnimationState) {
         if (isHiding && state == AmbientCueAnimationState.END) {
             Log.d(TAG, "Animation finished and view is marked for hiding. Removing view.")
             if (cueBar != null && cueBar?.parent != null) {
                 taskbarControllers.taskbarOverlayController.hideWindow()
             }
+            animateStashHandleAlpha(true)
         }
     }
 
@@ -211,16 +246,11 @@ class CueBarController(private val activity: TaskbarActivityContext) :
         }
         taskbarControllers.sharedState?.cueBarVisible = isCueBarVisible
 
-        // Animate stashHandle alpha.
-        val stashedHandleAlpha =
-            taskbarControllers.stashedHandleViewController.stashedHandleAlpha.get(
-                StashedHandleViewController.ALPHA_INDEX_CUEBAR_HIDDEN
-            )
-        val targetAlpha = if (isCueBarVisible) 0f else 1f
-        stashedHandleAlpha
-            .animateToValue(targetAlpha)
-            .setDuration(STASHED_HANDLE_ALPHA_ANIMATION_DURATION_MS)
-            .start()
+        val context = taskbarControllers.taskbarActivityContext
+        if (context != null && context.isThreeButtonNav) {
+            taskbarControllers.navbarButtonsViewController?.setCueBarVisible(isCueBarVisible)
+        }
+        animateStashHandleAlpha(!isCueBarVisible)
 
         if (isCueBarVisible) {
             isHiding = false // Cancel any pending hide
